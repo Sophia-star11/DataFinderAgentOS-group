@@ -61,6 +61,11 @@ def run_migrations():
             _migrate_skill_function,
             _migrate_skill_seed,
             _migrate_skill_seed_plus,
+            _migrate_crawl4ai_skill,
+            _migrate_hot_news_to_builtin,
+            _migrate_remove_movie_weather_skills,
+            _migrate_fix_hot_news_impl_config,
+            _migrate_reorder_menu_skill,
             _migrate_conversation_management_function,
         ]
         
@@ -976,20 +981,31 @@ def _migrate_api_interface_seed(conn):
 
 
 def _migrate_api_interface_reorder(conn):
-    """调整智能中枢下模块排序：数字员工(2) → 接口管理(3) → 数智大屏(4) → 舆情大屏(5)"""
+    """调整智能中枢下模块排序：数字员工(2) → 接口管理(3) → 技能管理(4) → 数智大屏(5) → 舆情大屏(6)"""
     ordering = [
         ("model_engine", 1),
         ("digital_employee", 2),
         ("api_interface", 3),
-        ("data_screen", 4),
-        ("opinion_screen", 5),
+        ("skill_management", 4),
+        ("data_screen", 5),
+        ("opinion_screen", 6),
     ]
     for code, order in ordering:
         conn.execute(
             "UPDATE functions SET sort_order=? WHERE code=? AND sort_order!=?",
             (order, code, order)
         )
-    logger.info("智能中枢模块排序已调整：数字员工→接口管理→数智大屏→舆情大屏")
+    # 同步更新 menus.sort_order（控制实际侧边栏显示顺序）
+    admin_role = conn.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
+    if admin_role:
+        for code, order in ordering:
+            func = conn.execute("SELECT id FROM functions WHERE code=?", (code,)).fetchone()
+            if func:
+                conn.execute(
+                    "UPDATE menus SET sort_order=? WHERE role_id=? AND func_id=?",
+                    (order + 10, admin_role["id"], func["id"])
+                )
+    logger.info("智能中枢模块排序已调整：数字员工→接口管理→技能管理→数智大屏→舆情大屏")
 
 
 def _migrate_digital_employees_api_config(conn):
@@ -1083,7 +1099,7 @@ def _migrate_skill_function(conn):
 
 
 def _migrate_skill_seed(conn):
-    """预置一个自定义技能：今日热点摘要（调用新闻API获取头条并生成摘要）"""
+    """预置一个内置技能：今日热点摘要（调用新闻API获取头条并生成摘要）"""
     if not conn.execute("SELECT id FROM skills WHERE code='hot_news_summary'").fetchone():
         conn.execute(
             """INSERT INTO skills (name, code, type, impl_type, impl_config, input_schema, output_schema, status, description)
@@ -1091,7 +1107,7 @@ def _migrate_skill_seed(conn):
             (
                 "今日热点摘要",
                 "hot_news_summary",
-                "custom",
+                "builtin",
                 "api_call",
                 json.dumps({
                     "url": "https://v.juhe.cn/toutiao/index",
@@ -1109,22 +1125,8 @@ def _migrate_skill_seed(conn):
 
 
 def _migrate_skill_seed_plus(conn):
-    """预置更多预设技能：天气查询、电影搜索、数据采集助手"""
+    """预置预设技能：数据采集助手"""
     skills = [
-        {
-            "name": "天气查询",
-            "code": "weather_query",
-            "impl_type": "api_call",
-            "impl_config": {"url": "http://localhost:10010/api/mock/weather", "method": "GET", "headers": {}, "params": {"city": "{city}"}},
-            "description": "查询指定城市的实时天气信息，包括温度、湿度、风向、气压、能见度等详细数据"
-        },
-        {
-            "name": "电影搜索",
-            "code": "movie_search",
-            "impl_type": "api_call",
-            "impl_config": {"url": "http://localhost:10010/api/mock/movie", "method": "GET", "headers": {}, "params": {"keyword": "{keyword}"}},
-            "description": "通过TMDB API搜索电影信息，返回包含海报、评分、简介的电影列表"
-        },
         {
             "name": "数据采集助手",
             "code": "data_collector",
@@ -1188,3 +1190,107 @@ def _migrate_conversation_management_function(conn):
                     (admin_role["id"], func["id"], max_order + 1)
                 )
             logger.info(f"{name}功能菜单已添加")
+
+
+def _migrate_crawl4ai_skill(conn):
+    """预置 Crawl4AI 网页爬虫技能（python_func 实现）"""
+    existing = conn.execute("SELECT id FROM skills WHERE code='crawl4ai'").fetchone()
+    if not existing:
+        conn.execute(
+            """INSERT INTO skills (name, code, type, impl_type, impl_config, input_schema, output_schema, status, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "网页爬虫",
+                "crawl4ai",
+                "builtin",
+                "python_func",
+                json.dumps({
+                    "module_path": "app.services.crawl4ai_skill",
+                    "func_name": "crawl_url"
+                }, ensure_ascii=False),
+                json.dumps({
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "需要爬取的网页URL"}
+                    },
+                    "required": ["url"]
+                }, ensure_ascii=False),
+                json.dumps({
+                    "type": "object",
+                    "properties": {
+                        "success": {"type": "boolean"},
+                        "title": {"type": "string"},
+                        "content": {"type": "string"},
+                        "url": {"type": "string"}
+                    }
+                }, ensure_ascii=False),
+                1,
+                "基于 Crawl4AI 引擎的智能网页爬虫技能，自动抓取指定 URL 的网页正文内容（支持 JavaScript 渲染页面），"
+                "提取页面标题和 Markdown 格式正文，最大返回 8000 字符。适用于网页内容采集、舆情监控、资料归档等场景。"
+            )
+        )
+        logger.info("已预置技能：网页爬虫 (Crawl4AI)")
+    else:
+        logger.info("技能已存在：网页爬虫 (Crawl4AI)，跳过")
+
+
+def _migrate_reorder_menu_skill(conn):
+    """调整菜单排序：数字员工→接口管理→技能管理→数智大屏→舆情大屏"""
+    admin_role = conn.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
+    if not admin_role:
+        return
+    ordering = [
+        ("model_engine", 4),
+        ("digital_employee", 8),
+        ("api_interface", 9),
+        ("skill_management", 10),
+        ("data_screen", 11),
+        ("opinion_screen", 12),
+    ]
+    for code, order in ordering:
+        func = conn.execute("SELECT id FROM functions WHERE code=?", (code,)).fetchone()
+        if func:
+            conn.execute(
+                "UPDATE menus SET sort_order=? WHERE role_id=? AND func_id=?",
+                (order, admin_role["id"], func["id"])
+            )
+    logger.info("菜单排序已调整：数字员工→接口管理→技能管理→数智大屏→舆情大屏")
+
+
+def _migrate_hot_news_to_builtin(conn):
+    """将今日热点摘要技能从 custom 改为 builtin"""
+    cursor = conn.execute(
+        "UPDATE skills SET type='builtin' WHERE code='hot_news_summary' AND type!='builtin'"
+    )
+    if cursor.rowcount > 0:
+        logger.info("已将今日热点摘要技能类型更新为 builtin")
+    else:
+        logger.info("今日热点摘要已是 builtin 类型，无需更新")
+
+
+def _migrate_remove_movie_weather_skills(conn):
+    """删除电影搜索和天气查询两个技能"""
+    for code in ("movie_search", "weather_query"):
+        cursor = conn.execute("DELETE FROM skills WHERE code=?", (code,))
+        if cursor.rowcount > 0:
+            logger.info(f"已删除技能: {code}")
+        else:
+            logger.info(f"技能不存在，跳过删除: {code}")
+
+
+def _migrate_fix_hot_news_impl_config(conn):
+    """更新今日热点摘要技能的 impl_config 为真实聚合数据API地址和密钥"""
+    new_config = json.dumps({
+        "url": "https://v.juhe.cn/toutiao/index",
+        "method": "GET",
+        "headers": {},
+        "params": {"type": "top", "key": "7eb1ec877934110a5fada4024bd027c7"}
+    }, ensure_ascii=False)
+    cursor = conn.execute(
+        "UPDATE skills SET impl_config=? WHERE code='hot_news_summary' AND impl_config!=?",
+        (new_config, new_config)
+    )
+    if cursor.rowcount > 0:
+        logger.info("已更新今日热点摘要技能 impl_config 为真实聚合数据API")
+    else:
+        logger.info("今日热点摘要技能配置已正确，无需更新")

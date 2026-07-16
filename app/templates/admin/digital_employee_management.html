@@ -6,7 +6,7 @@
 .data-table td:last-child { white-space: nowrap; }
 .data-table td, .data-table th { vertical-align: middle !important; text-align: center; }
 .data-table .desc-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cell-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; display: block; }
+.cell-text { overflow: hidden !important; text-overflow: ellipsis; white-space: nowrap !important; width: 260px; display: inline-block; height: 22px; line-height: 22px; vertical-align: middle; }
 .cell-empty { color: #999; }
 .type-badge-llm { background: #6366f1 !important; }
 .type-badge-api { background: #0ea5e9 !important; }
@@ -408,12 +408,12 @@ layui.use(['form', 'layer', 'jquery'], function(){
             url: '/api/digital-employees/skills', type: 'GET', dataType: 'json',
             success: function(res) {
                 var skills = res.data || [];
-                var html = '';
+                var html = '<option value="">不关联</option>';
                 skills.forEach(function(s) {
                     var sel = (selectedIds && selectedIds.indexOf(String(s.id)) !== -1) ? 'selected' : '';
                     html += '<option value="' + s.id + '" ' + sel + '>' + s.name + '</option>';
                 });
-                $('#skillSelect').html(html || '<option value="">(无可用技能)</option>');
+                $('#skillSelect').html(html);
                 form.render('select');
             },
             error: function() {
@@ -423,13 +423,21 @@ layui.use(['form', 'layer', 'jquery'], function(){
         });
     }
 
-    // 处理技能多选
+    // 处理技能多选：选中"不关联"时清除其他选择
     form.on('select(skillSelect)', function(data) {
-        var selectedValues = [];
-        $('#skillSelect option:selected').each(function() {
-            selectedValues.push($(this).val());
+        var $select = $('#skillSelect');
+        // 如果选中了"不关联"选项(value='')，则取消其他所有选项
+        var emptySelected = false;
+        $select.find('option[value=""]').each(function() {
+            if ($(this).prop('selected')) {
+                emptySelected = true;
+            }
         });
-        $('input[name="skill_ids"]').val(JSON.stringify(selectedValues));
+        if (emptySelected) {
+            $select.find('option').prop('selected', false);
+            $select.find('option[value=""]').prop('selected', true);
+            form.render('select');
+        }
     });
 
     // 加载已启用的API接口列表（供关联选择）
@@ -505,7 +513,7 @@ layui.use(['form', 'layer', 'jquery'], function(){
                         '<td>' + rowNum + '</td>' +
                         '<td>' + (item.name || '<span class="cell-empty">-</span>') + '</td>' +
                         '<td>' + typeHtml + '</td>' +
-                        '<td style="max-width:260px;overflow:hidden;"><div class="cell-text">' + (item.description || '<span class="cell-empty">-</span>') + '</div></td>' +
+                        '<td style="overflow:hidden;"><div class="cell-text">' + (item.description || '<span class="cell-empty">-</span>') + '</div></td>' +
                         '<td>' + (item.sort_order||0) + '</td>' +
                         '<td>' + statusHtml + '</td>' +
                         '<td>' + (item.created_at||'<span class="cell-empty">-</span>') + '</td>' +

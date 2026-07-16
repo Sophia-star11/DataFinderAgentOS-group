@@ -11,6 +11,9 @@
 .method-post { background: #1890ff; }
 .method-put { background: #fa8c16; }
 .method-delete { background: #ff4d4f; }
+.data-table td:last-child { white-space: nowrap; }
+.action-btns { display: flex; gap: 6px; justify-content: center; align-items: center; }
+.action-btns .layui-btn { margin: 0; }
 </style>
 <div class="layui-layout layui-layout-admin">
     <div class="layui-header">
@@ -257,11 +260,11 @@ layui.use(['form', 'layer', 'element', 'jquery'], function(){
                             '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (item.url || '') + '">' + (item.url || '') + '</td>' +
                             '<td style="text-align:center;">' + (item.status == 1 ? '<span class="badge-active">启用</span>' : '<span class="badge-inactive">禁用</span>') + '</td>' +
                             '<td>' + (item.created_at || '') + '</td>' +
-                            '<td>' +
-                                '<button class="layui-btn layui-btn-xs layui-btn-normal" onclick="editItem(' + item.id + ')"><i class="layui-icon layui-icon-edit"></i></button> ' +
-                                '<button class="layui-btn layui-btn-xs layui-btn-warm" onclick="toggleStatus(' + item.id + ')">' + (item.status == 1 ? '禁用' : '启用') + '</button> ' +
-                                '<button class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteItem(' + item.id + ')"><i class="layui-icon layui-icon-delete"></i></button>' +
-                            '</td>' +
+                            '<td><div class="action-btns">' +
+                                '<button class="layui-btn layui-btn-xs layui-btn-normal" onclick="editItem(' + item.id + ')"><i class="layui-icon layui-icon-edit"></i> 编辑</button>' +
+                                '<button class="layui-btn layui-btn-xs layui-btn-warm" onclick="toggleStatus(' + item.id + ')"><i class="layui-icon layui-icon-set"></i> ' + (item.status == 1 ? '禁用' : '启用') + '</button>' +
+                                '<button class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteItem(' + item.id + ')"><i class="layui-icon layui-icon-delete"></i> 删除</button>' +
+                            '</div></td>' +
                         '</tr>';
                     });
                 }

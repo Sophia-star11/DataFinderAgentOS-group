@@ -7,6 +7,7 @@ from app.controllers.base import BaseHandler
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.ai_model import AiModelRepository
 from app.models.skill import SkillRepository
+from app.services.skill_executor import SkillExecutor
 
 
 class DigitalEmployeeManagementHandler(BaseHandler):
@@ -302,6 +303,32 @@ class DigitalEmployeeTestApiHandler(BaseHandler):
 
         messages = []
         system_prompt = employee.get("system_prompt", "")
+
+        # 执行关联技能：加载数字员工关联的技能并执行，将上下文注入到系统提示词
+        try:
+            skill_ids_str = employee.get("skills", "")
+            if skill_ids_str:
+                skill_ids = json.loads(skill_ids_str) if isinstance(skill_ids_str, str) else skill_ids_str
+                if skill_ids and isinstance(skill_ids, list):
+                    skills = SkillRepository.get_by_ids([int(s) for s in skill_ids if str(s).isdigit()])
+                    if skills:
+                        skill_context_parts = []
+                        for sk in skills:
+                            result = SkillExecutor.execute(sk, {"keyword": test_message, "user_input": test_message, "city": test_message})
+                            if result["success"]:
+                                data_str = json.dumps(result["data"], ensure_ascii=False, indent=2) if not isinstance(result.get("data"), str) else result["data"]
+                                skill_context_parts.append(f"[技能执行: {sk['name']}]\n{data_str}")
+                        if skill_context_parts:
+                            skill_context = "\n\n".join(skill_context_parts)
+                            context_msg = f"以下是通过关联技能获取的辅助信息，请结合这些信息回答用户问题：\n\n{skill_context}"
+                            if system_prompt:
+                                system_prompt = f"{system_prompt}\n\n---\n{context_msg}"
+                            else:
+                                system_prompt = context_msg
+        except Exception as e:
+            import logging
+            logging.getLogger("test_llm").error(f"技能执行失败: {e}")
+
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": test_message})
