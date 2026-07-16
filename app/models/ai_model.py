@@ -1,4 +1,17 @@
 from app.models.db import get_connection
+from app.utils.crypto import encrypt_api_key, decrypt_api_key
+
+
+def _decrypt_model_api_key(model):
+    if model and "api_key" in model and model["api_key"]:
+        model["api_key"] = decrypt_api_key(model["api_key"])
+    return model
+
+
+def _decrypt_models_api_key(models):
+    for model in models:
+        _decrypt_model_api_key(model)
+    return models
 
 
 class AiModelRepository:
@@ -24,7 +37,9 @@ class AiModelRepository:
                 f"SELECT * FROM ai_models {where} ORDER BY sort_order ASC, id DESC LIMIT ? OFFSET ?",
                 params + [page_size, offset]
             ).fetchall()
-            return {"data": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+            data = [dict(r) for r in rows]
+            _decrypt_models_api_key(data)
+            return {"data": data, "total": total, "page": page, "page_size": page_size}
         finally:
             conn.close()
 
@@ -43,7 +58,8 @@ class AiModelRepository:
         conn = get_connection()
         try:
             row = conn.execute("SELECT * FROM ai_models WHERE id=?", (model_id,)).fetchone()
-            return dict(row) if row else None
+            model = dict(row) if row else None
+            return _decrypt_model_api_key(model)
         finally:
             conn.close()
 
@@ -52,7 +68,8 @@ class AiModelRepository:
         conn = get_connection()
         try:
             row = conn.execute("SELECT * FROM ai_models WHERE is_default=1 AND status=1 LIMIT 1").fetchone()
-            return dict(row) if row else None
+            model = dict(row) if row else None
+            return _decrypt_model_api_key(model)
         finally:
             conn.close()
 
@@ -61,16 +78,17 @@ class AiModelRepository:
                category='text', system_prompt='', temperature=0.7, top_p=1.0, context_length=4096):
         conn = get_connection()
         try:
+            encrypted_api_key = encrypt_api_key(api_key) if api_key else api_key
             conn.execute(
                 """INSERT INTO ai_models (name, provider, model_name, api_base_url, api_key,
                    max_tokens, category, system_prompt, temperature, top_p, context_length)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (name, provider, model_name, api_base_url, api_key,
+                (name, provider, model_name, api_base_url, encrypted_api_key,
                  max_tokens, category, system_prompt, temperature, top_p, context_length)
             )
             conn.commit()
             return True
-        except Exception as e:
+        except Exception:
             return False
         finally:
             conn.close()
@@ -83,6 +101,8 @@ class AiModelRepository:
                        "max_tokens", "token_count", "is_default", "status", "sort_order",
                        "category", "system_prompt", "temperature", "top_p", "context_length"}
             updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+            if "api_key" in updates and updates["api_key"]:
+                updates["api_key"] = encrypt_api_key(updates["api_key"])
             if not updates:
                 return False
             set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -132,6 +152,8 @@ class AiModelRepository:
             rows = conn.execute(
                 "SELECT * FROM ai_models WHERE status=1 ORDER BY sort_order ASC, id DESC"
             ).fetchall()
-            return [dict(r) for r in rows]
+            data = [dict(r) for r in rows]
+            _decrypt_models_api_key(data)
+            return data
         finally:
             conn.close()
