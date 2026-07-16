@@ -9,6 +9,9 @@ from app.models.ai_model import AiModelRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.conversation import ConversationRepository
 from app.controllers.data_query import DataQueryTool
+from app.utils.logger import get_logger
+
+logger = get_logger('user_chat')
 
 
 class UserChatHandler(BaseHandler):
@@ -439,7 +442,7 @@ class UserChatApiHandler(BaseHandler):
                                                 "content": f"以下是从用户提供的URL {urls[0]} 中爬取到的网页内容，请基于此内容回答用户问题：\n\n{crawled}"
                                             })
                                 except Exception as e:
-                                    print(f"[Crawl4AI] 爬取失败: {e}")
+                                    logger.error(f"Crawl4AI爬取失败: {e}")
                 elif employee["type"] == "api":
                     # API型：直接调用API端点，不经过模型
                     self._call_api_employee(employee, msg_list, start_time=start_time)
