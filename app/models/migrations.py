@@ -494,7 +494,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "采集专员",
                 "llm",
-                "负责深度采集任务，自动获取指定数据并给出结果",
+                "基于大语言模型（agnes-2.0-flash）的智能数据采集助理，支持深度采集（Crawl4AI）任务，自动抓取、整理和分析指定网页内容并返回结构化结果",
                 model_id,
                 "你是一个专业的数据采集专员，负责从互联网采集、整理和分析数据。请根据用户需求，全面获取相关信息并给出结构化的分析结果。",
                 json.dumps([{"name": "深度采集", "description": "执行深度数据采集任务", "action": "deep_collect"}], ensure_ascii=False),
@@ -512,7 +512,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "天气",
                 "api",
-                "查询天气信息，支持通过城市名称获取实时天气数据",
+                "调用 wttr.in API 查询指定城市的实时天气数据，通过 {city} 占位符传入城市名称，返回包含温度、湿度、风速等详细天气信息",
                 "https://wttr.in/{city}",
                 "GET",
                 json.dumps({}, ensure_ascii=False),
@@ -531,7 +531,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "新闻",
                 "api",
-                "返回实时热门新闻（聚合数据API+百度兜底，含标题、来源、时间、摘要、链接）",
+                "调用聚合数据新闻API获取实时热门新闻列表，返回结构化数据（含标题、来源、日期、摘要、图片链接），支持点击标题直接跳转至原文详情页",
                 "http://localhost:10010/api/mock/news",
                 "GET",
                 json.dumps({}, ensure_ascii=False),
@@ -550,7 +550,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "随机音乐",
                 "api",
-                "随机推荐一首歌，iTunes真实音源，含歌名、歌手、封面、播放链接",
+                "调用本地音乐推荐API随机推荐一首歌曲，返回包含歌名、歌手、封面图片和在线播放链接的结构化信息，支持内置音乐播放器在线试听",
                 "http://localhost:10010/api/mock/music",
                 "GET",
                 json.dumps({}, ensure_ascii=False),
@@ -569,7 +569,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "电影",
                 "api",
-                "搜索电影信息，TMDB API+豆瓣补充+本地详情，含导演、演员、简介、评分、年份",
+                "通过TMDB API搜索电影信息，支持按电影名称关键词查询，返回包含海报图片、综合评分、剧情简介、导演、演员阵容、上映年份的详细电影数据",
                 "http://localhost:10010/api/mock/movie?keyword={query}",
                 "GET",
                 json.dumps({}, ensure_ascii=False),
@@ -588,7 +588,7 @@ def _migrate_digital_employees_initial(conn):
             (
                 "小dummy（文案生成助手）",
                 "llm",
-                "具有特定步骤的文案生成助手",
+                "基于大语言模型的文案生成助手，严格按照 constraint.md 中定义的工作步骤（分析需求→查阅模板→撰写大纲→生成正文→润色优化）循序执行文案创作任务",
                 model_id,
                 "你是小dummy，一个专业的文案生成助手。请严格按照工作步骤执行任务：分析需求→查阅模板→撰写大纲→生成正文→润色优化。",
                 json.dumps([{"name": "文案生成", "description": "按照工作步骤生成专业文案", "action": "copywriting"}], ensure_ascii=False),
