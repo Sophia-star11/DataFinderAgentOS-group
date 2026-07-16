@@ -10,7 +10,10 @@ from app.controllers.base import BaseHandler
 from app.models.watch_source import WatchSourceRepository
 from app.models.watch_data import WatchDataRepository
 from app.models.data_warehouse import DataWarehouseRepository
+from app.utils.logger import get_logger
 from app.parsers import ParserRegistry
+
+logger = get_logger('admin_watch')
 
 
 class WatchManagementHandler(BaseHandler):
@@ -61,7 +64,7 @@ class WatchCollectApiHandler(BaseHandler):
                 items = WatchCollectApiHandler._fetch_from_source(source, keyword, page)
                 all_items.extend(items)
             except Exception as e:
-                print(f"采集出错 [source={source.get('name')}]: {e}")
+                logger.error(f"采集出错 [source={source.get('name')}]: {e}")
 
         # 批量入库
         if all_items:
@@ -128,7 +131,7 @@ class WatchCollectApiHandler(BaseHandler):
             with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
         except Exception as e:
-            print(f"HTTP请求失败: {e}")
+            logger.error(f"HTTP请求失败: {e}")
             return []
 
         # Dispatch to the appropriate parser based on source_type

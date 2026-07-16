@@ -6,6 +6,7 @@ import urllib.parse
 from app.controllers.base import BaseHandler
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.ai_model import AiModelRepository
+from app.models.skill import SkillRepository
 
 
 class DigitalEmployeeManagementHandler(BaseHandler):
@@ -113,81 +114,119 @@ class DigitalEmployeeDeleteApiHandler(BaseHandler):
         if not item_id:
             self.write(json.dumps({"success": False, "message": "ID不能为空"}))
             return
+        
+        # 先获取数字员工信息（用于清理文件目录）
+        item = DigitalEmployeeRepository.get_by_id(int(item_id))
+        
         if DigitalEmployeeRepository.delete(int(item_id)):
+            # 清理 data/dgUser/{name}/ 目录下的 .md 文件
+            if item and item.get("name"):
+                dg_dir = os.path.join("data", "dgUser", item["name"])
+                if os.path.exists(dg_dir):
+                    import shutil
+                    shutil.rmtree(dg_dir, ignore_errors=True)
             self.write(json.dumps({"success": True, "message": "删除成功"}))
         else:
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
 
 class DigitalEmployeeUploadMdHandler(BaseHandler):
-    """上传 .md 文件并读取内容"""
+    """上传 .md 文件并读取内容（XSRF豁免：multipart/form-data与XSRF不兼容）"""
+    def check_xsrf_cookie(self):
+        pass  # 已有 @authenticated 保护，文件上传绕过 XSRF
+
     @tornado.web.authenticated
     def post(self):
-        name = self.get_argument("name", "")
-        if not name:
-            self.write(json.dumps({"success": False, "message": "缺少数字员工名称"}))
-            return
+        try:
+            name = self.get_argument("name", "")
+            if not name:
+                self.set_header("Content-Type", "application/json")
+                self.set_status(400)
+                self.write(json.dumps({"success": False, "message": "缺少数字员工名称"}))
+                self.finish()
+                return
 
-        base_dir = os.path.join("data", "dgUser", name)
-        os.makedirs(base_dir, exist_ok=True)
+            base_dir = os.path.join("data", "dgUser", name)
+            os.makedirs(base_dir, exist_ok=True)
 
-        uploaded_files = []
-        all_content = ""
+            uploaded_files = []
+            all_content = ""
 
-        for field_name in self.request.files:
-            for file_info in self.request.files[field_name]:
-                filename = file_info.get("filename", "")
-                if not filename.lower().endswith(".md"):
-                    continue
-                body = file_info.get("body", b"")
-                filepath = os.path.join(base_dir, filename)
-                # 避免同名文件覆盖，加编号
-                if os.path.exists(filepath):
-                    name_base, name_ext = os.path.splitext(filename)
-                    counter = 1
-                    while os.path.exists(os.path.join(base_dir, f"{name_base}_{counter}{name_ext}")):
-                        counter += 1
-                    filepath = os.path.join(base_dir, f"{name_base}_{counter}{name_ext}")
-                with open(filepath, "wb") as f:
-                    f.write(body)
-                uploaded_files.append(os.path.basename(filepath))
-                all_content += f"\n\n--- {os.path.basename(filepath)} ---\n{body.decode('utf-8', errors='replace')}"
+            for field_name in self.request.files:
+                for file_info in self.request.files[field_name]:
+                    filename = file_info.get("filename", "")
+                    if not filename.lower().endswith(".md"):
+                        continue
+                    body = file_info.get("body", b"")
+                    filepath = os.path.join(base_dir, filename)
+                    # 直接覆盖同名文件，防止重复上传产生 _1 _2 等编号副本
+                    with open(filepath, "wb") as f:
+                        f.write(body)
+                    uploaded_files.append(os.path.basename(filepath))
+                    content = body.decode('utf-8', errors='replace')
+                    all_content += f"\n\n--- {os.path.basename(filepath)} ---\n{content}"
 
-        if not uploaded_files:
-            self.write(json.dumps({"success": False, "message": "未找到有效的 .md 文件"}))
-            return
+            if not uploaded_files:
+                self.set_header("Content-Type", "application/json")
+                self.write(json.dumps({"success": False, "message": "未找到有效的 .md 文件"}))
+                self.finish()
+                return
 
-        self.write(json.dumps({
-            "success": True,
-            "message": f"成功上传 {len(uploaded_files)} 个 .md 文件",
-            "files": uploaded_files,
-            "content": all_content.strip()
-        }, ensure_ascii=False))
+            self.set_header("Content-Type", "application/json")
+            self.set_status(200)
+            self.write(json.dumps({
+                "success": True,
+                "message": f"成功上传 {len(uploaded_files)} 个 .md 文件",
+                "files": uploaded_files,
+                "content": all_content.strip()
+            }, ensure_ascii=False))
+            self.finish()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.set_header("Content-Type", "application/json")
+            self.set_status(500)
+            self.write(json.dumps({"success": False, "message": f"上传处理异常: {str(e)[:200]}"}))
+            self.finish()
 
 
 class DigitalEmployeeListMdHandler(BaseHandler):
     """列出数字员工已上传的 .md 文件"""
     @tornado.web.authenticated
     def get(self):
-        name = self.get_argument("name", "")
-        if not name:
-            self.write(json.dumps({"success": False, "message": "缺少数字员工名称"}))
-            return
+        try:
+            name = self.get_argument("name", "")
+            if not name:
+                self.set_header("Content-Type", "application/json")
+                self.write(json.dumps({"success": False, "message": "缺少数字员工名称"}))
+                self.finish()
+                return
 
-        base_dir = os.path.join("data", "dgUser", name)
-        if not os.path.exists(base_dir):
-            self.write(json.dumps({"success": True, "files": []}))
-            return
+            base_dir = os.path.join("data", "dgUser", name)
+            if not os.path.exists(base_dir):
+                self.set_header("Content-Type", "application/json")
+                self.write(json.dumps({"success": True, "files": []}))
+                self.finish()
+                return
 
-        files = []
-        for f in sorted(os.listdir(base_dir)):
-            if f.lower().endswith(".md"):
-                filepath = os.path.join(base_dir, f)
-                with open(filepath, "r", encoding="utf-8") as fh:
-                    content = fh.read()
-                files.append({"name": f, "size": os.path.getsize(filepath), "content": content})
+            files = []
+            for f in sorted(os.listdir(base_dir)):
+                if f.lower().endswith(".md"):
+                    filepath = os.path.join(base_dir, f)
+                    with open(filepath, "r", encoding="utf-8") as fh:
+                        content = fh.read()
+                    files.append({"name": f, "size": os.path.getsize(filepath), "content": content})
 
-        self.write(json.dumps({"success": True, "files": files}, ensure_ascii=False))
+            self.set_header("Content-Type", "application/json")
+            self.write(json.dumps({"success": True, "files": files}, ensure_ascii=False))
+            self.finish()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.set_header("Content-Type", "application/json")
+            self.set_status(500)
+            self.write(json.dumps({"success": False, "message": f"获取文件列表异常: {str(e)[:200]}"}))
+            self.finish()
 
 
 class DigitalEmployeeModelsApiHandler(BaseHandler):
@@ -196,6 +235,14 @@ class DigitalEmployeeModelsApiHandler(BaseHandler):
     def get(self):
         models = DigitalEmployeeRepository.get_all_models()
         self.write(json.dumps({"success": True, "data": models}, ensure_ascii=False))
+
+
+class DigitalEmployeeSkillsApiHandler(BaseHandler):
+    """获取可用技能列表（用于数字员工关联多选）"""
+    @tornado.web.authenticated
+    def get(self):
+        skills = SkillRepository.get_enabled_list()
+        self.write(json.dumps({"success": True, "data": skills}, ensure_ascii=False))
 
 
 class DigitalEmployeeTestApiHandler(BaseHandler):

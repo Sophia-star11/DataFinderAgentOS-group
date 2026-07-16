@@ -1,5 +1,8 @@
 import json
 from .db import get_connection
+from app.utils.logger import get_logger
+
+logger = get_logger('deep_collect')
 
 
 class DeepCollectRepository:
@@ -18,7 +21,7 @@ class DeepCollectRepository:
             conn.commit()
             return cur.lastrowid
         except Exception as e:
-            print(f"[DeepCollect] create_task error: {e}")
+            logger.error(f"create_task error: {e}")
             return None
         finally:
             conn.close()
@@ -68,7 +71,7 @@ class DeepCollectRepository:
             conn.commit()
             return True
         except Exception as e:
-            print(f"[DeepCollect] update_task error: {e}")
+            logger.error(f"update_task error: {e}")
             return False
         finally:
             conn.close()
@@ -147,10 +150,10 @@ class DeepCollectRepository:
             )
             conn.commit()
             data_id = cur.lastrowid
-            print(f"[DeepCollect] 采集数据已保存, data_id={data_id}, warehouse_id={warehouse_id}")
+            logger.info(f"采集数据已保存, data_id={data_id}, warehouse_id={warehouse_id}")
             return data_id
         except Exception as e:
-            print(f"[DeepCollect] save_collected_data error: {e}")
+            logger.error(f"save_collected_data error: {e}")
             return None
         finally:
             conn.close()

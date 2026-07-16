@@ -1,5 +1,6 @@
 """用户侧-前台控制器：对话、模型、数字员工、注册等API"""
 import json
+import random
 import urllib.parse
 import time
 import tornado.web
@@ -9,6 +10,9 @@ from app.models.ai_model import AiModelRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.conversation import ConversationRepository
 from app.controllers.data_query import DataQueryTool
+from app.utils.logger import get_logger
+
+logger = get_logger('user_chat')
 
 
 class UserChatHandler(BaseHandler):
@@ -540,10 +544,10 @@ class UserChatApiHandler(BaseHandler):
                                                 "content": f"以下是从用户提供的URL {urls[0]} 中爬取到的网页内容，请基于此内容回答用户问题：\n\n{crawled}"
                                             })
                                 except Exception as e:
-                                    print(f"[Crawl4AI] 爬取失败: {e}")
+                                    logger.error(f"Crawl4AI爬取失败: {e}")
                 elif employee["type"] == "api":
                     # API型：直接调用API端点，不经过模型
-                    self._call_api_employee(employee, msg_list, start_time=start_time)
+                    await self._call_api_employee(employee, msg_list, start_time=start_time)
                     return
 
         # 意图识别：无指定数字员工时，检测是否为数据查询/图表/分析/关系请求
@@ -756,10 +760,17 @@ class UserChatApiHandler(BaseHandler):
         self.write("data: [DONE]\n\n")
         self.finish()
 
-    def _call_api_employee(self, employee, msg_list, start_time=None):
-        """调用API型数字员工"""
-        import requests as sync_requests
+    async def _call_api_employee(self, employee, msg_list, start_time=None):
+        """调用API型数字员工
+
+        架构说明：
+          - 使用 Tornado AsyncHTTPClient 异步调用，不阻塞事件循环
+          - 内置 Mock API（新闻/音乐/电影）直接调用本地函数，避免 HTTP 递归
+          - 外部 API 通过 HTTP 异步调用，支持 GET/POST
+          - 若需新增内置 API，在 _call_builtin_api() 中注册即可
+        """
         from tornado.ioloop import IOLoop
+        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
         if start_time is None:
             start_time = time.time()
@@ -781,11 +792,11 @@ class UserChatApiHandler(BaseHandler):
             if msg_list and msg_list[-1].get("role") == "user":
                 user_content = msg_list[-1].get("content", "")
 
-            # 在URL中替换占位符
-            if "{city}" in api_url and user_content:
-                api_url = api_url.replace("{city}", urllib.parse.quote(user_content))
-            if "{query}" in api_url and user_content:
-                api_url = api_url.replace("{query}", urllib.parse.quote(user_content))
+            # 在URL中替换占位符（始终替换，空值时清空占位符避免残余）
+            query_val = urllib.parse.quote(user_content) if user_content else ""
+            city_val = urllib.parse.quote(user_content) if user_content else ""
+            api_url = api_url.replace("{query}", query_val)
+            api_url = api_url.replace("{city}", city_val)
 
             # 填充参数模板，手动拼接避免urlencode二次编码（如%C→%25C）
             filled_params = {}
@@ -800,33 +811,42 @@ class UserChatApiHandler(BaseHandler):
             if raw_query:
                 api_url = api_url + "?" + raw_query
 
-            if api_method == "GET":
-                resp = sync_requests.get(api_url, headers=api_headers, timeout=15)
+            # ---- 优先：本地内置 API 直调（零网络开销、无死锁风险） ----
+            if "/api/mock/" in api_url or "/mock/" in api_url:
+                body_text = _call_builtin_mock_api(api_url)
             else:
-                resp = sync_requests.post(api_url, headers=api_headers, data=filled_params, timeout=15)
+                # ---- 外部 HTTP API：异步调用 ----
+                http_client = AsyncHTTPClient()
+                if api_method == "GET":
+                    resp = await http_client.fetch(api_url, headers=api_headers,
+                                                   request_timeout=15, raise_error=False)
+                else:
+                    body = urllib.parse.urlencode(filled_params) if filled_params else None
+                    req = HTTPRequest(url=api_url, method="POST", headers=api_headers,
+                                      body=body, request_timeout=15)
+                    resp = await http_client.fetch(req, raise_error=False)
+                body_text = (resp.body or b"").decode("utf-8", errors="replace")
 
-            result_text = resp.text
+            result_text = body_text
             employee_name = employee.get("name", "")
-            response_format = "text"  # 默认文本格式
+            response_format = "text"
             extra_data = {}
 
-            # 检查HTTP状态码
-            if not resp.ok:
-                error_info = ""
+            # 解析 JSON 响应体
+            try:
+                resp_json = json.loads(body_text)
+            except (json.JSONDecodeError, ValueError):
+                resp_json = None
+
+            # 检查外部 HTTP 错误（仅当不是内置API返回的JSON时检查 resp.code）
+            if resp_json is None and "/api/mock/" not in api_url and "/mock/" not in api_url:
+                result_text = f"【服务暂不可用】{employee_name}返回了无法解析的响应"
+
+            # 模板提取模式（有 api_response_template 配置）
+            if resp_json and template:
                 try:
-                    err_json = resp.json()
-                    error_info = err_json.get("message") or err_json.get("error") or err_json.get("reason") or ""
-                except Exception:
-                    error_info = f"HTTP {resp.status_code}"
-                result_text = f"【服务暂不可用】{employee_name}服务返回错误: {error_info[:200]}"
-            # 仅在成功时尝试用模板提取关键字段
-            elif template:
-                try:
-                    resp_json = resp.json()
-                    # 数字员工特殊格式化：天气 → 中文输出 + 卡片数据
                     if "天气" in employee_name:
                         cc = resp_json.get("current_condition", [{}])[0]
-                        # 尝试获取中文天气描述
                         weather_desc = ""
                         lang_zh = cc.get("lang_zh", [])
                         if lang_zh and lang_zh[0].get("value"):
@@ -849,20 +869,14 @@ class UserChatApiHandler(BaseHandler):
                             f"能见度：{visibility} km\n"
                             f"气压：{pressure} hPa"
                         )
-                        # 卡片数据（供前台渲染天气卡片）
                         response_format = "weather_card"
                         extra_data = {
-                            "city": city_name,
-                            "weather": weather_desc,
-                            "temperature": temp,
-                            "humidity": humidity,
-                            "wind_speed": wind,
-                            "wind_dir": wind_dir,
-                            "pressure": pressure,
-                            "visibility": visibility
+                            "city": city_name, "weather": weather_desc,
+                            "temperature": temp, "humidity": humidity,
+                            "wind_speed": wind, "wind_dir": wind_dir,
+                            "pressure": pressure, "visibility": visibility
                         }
                     else:
-                        # 简单路径提取：weather.main.temp
                         keys = template.split(",")
                         extracted = []
                         for key in keys:
@@ -883,7 +897,6 @@ class UserChatApiHandler(BaseHandler):
                         if extracted:
                             result_text = "\n".join(extracted)
 
-                    # 通用卡片配置：如果数字员工配置了card_config，从API响应提取卡片字段
                     card_config = employee.get("card_config", "{}")
                     if card_config and response_format == "text":
                         try:
@@ -917,6 +930,16 @@ class UserChatApiHandler(BaseHandler):
                             pass
                 except Exception:
                     pass
+            elif resp_json:
+                # 无 template：检查是否内置 Mock API 或第三方 API 的自描述格式
+                if resp_json.get("success") and "data" in resp_json:
+                    data = resp_json["data"]
+                    if data.get("responseFormat"):
+                        response_format = data["responseFormat"]
+                        extra_data = data.get("extraData", {})
+                        txt = data.get("content", "")
+                        if txt:
+                            result_text = txt
 
             elapsed = time.time() - start_time
             response_data = json.dumps({
@@ -927,11 +950,10 @@ class UserChatApiHandler(BaseHandler):
                 "employee_name": employee_name,
                 "employee_response_format": response_format,
                 "extra_data": extra_data
-            })
+            }, ensure_ascii=False)
             self.write(f"data: {response_data}\n\n")
             IOLoop.current().add_callback(self.flush)
 
-            # 发送响应时间元数据
             usage_meta = json.dumps({
                 "usage": {
                     "completion_tokens": 0,
@@ -946,3 +968,125 @@ class UserChatApiHandler(BaseHandler):
 
         self.write("data: [DONE]\n\n")
         self.finish()
+
+
+# ============================================================
+#  内置 Mock API 直调函数（注册点：新增内置API在此添加）
+# ============================================================
+
+# 延迟导入避免循环依赖（运行时导入 mock_apis 模块的处理函数）
+def _call_builtin_mock_api(api_url):
+    """处理内置 Mock API 的直接调用（不走 HTTP，零网络开销）
+
+    注册方式：在此函数中添加 elif 分支，匹配 api_url 特征即可
+    返回: JSON 字符串
+    """
+    import urllib.parse as url_parse
+
+    parsed = url_parse.urlparse(api_url)
+    path = parsed.path
+    query = url_parse.parse_qs(parsed.query)
+
+    # 新闻 Mock API
+    if "mock/news" in path:
+        from app.controllers.mock_apis import _get_live_news
+        items, fetch_time = _get_live_news()
+        text_lines = [f"📰 **热门新闻速递**（{fetch_time}）\n"]
+        for i, item in enumerate(items, 1):
+            text_lines.append(
+                f"{i}. **[{item['title']}]({item['link']})**\n"
+                f"   📍 {item['source']}{'  🕐 ' + item['time'] if item.get('time') else ''}\n"
+                f"   {item['summary']}"
+            )
+        return json.dumps({
+            "success": True,
+            "data": {
+                "content": "\n\n".join(text_lines),
+                "responseFormat": "news_list",
+                "extraData": {"list": items}
+            }
+        }, ensure_ascii=False)
+
+    # 音乐 Mock API
+    if "mock/music" in path:
+        from app.controllers.mock_apis import _get_random_music_song
+        song = _get_random_music_song()
+        return json.dumps({
+            "success": True,
+            "data": {
+                "content": f"🎵 **{song['song']}** — {song['artist']}",
+                "responseFormat": "music_player",
+                "extraData": {
+                    "song": song["song"],
+                    "artist": song["artist"],
+                    "cover": song["cover"],
+                    "url": song["url"]
+                }
+            }
+        }, ensure_ascii=False)
+
+    # 电影 Mock API
+    if "mock/movie" in path:
+        from app.controllers.mock_apis import _search_movie, _get_random_movie
+        keyword = (query.get("keyword", [""])[0]).strip()
+        if keyword:
+            results = _search_movie(keyword)
+            if results:
+                movie = random.choice(results)
+            else:
+                return json.dumps({
+                    "success": True,
+                    "data": {
+                        "content": f"😅 未找到与「{keyword}」相关的电影，试试其他关键词吧！",
+                        "responseFormat": "text",
+                        "extraData": {}
+                    }
+                }, ensure_ascii=False)
+        else:
+            movie = _get_random_movie()
+        return json.dumps({
+            "success": True,
+            "data": {
+                "content": (f"🎬 **{movie['title']}**（{movie['year']}）\n\n"
+                           f"🎥 导演：{movie['director']}\n"
+                           f"👥 演员：{' / '.join(movie['actors'][:5])}\n"
+                           f"⭐ 评分：{movie['rating']}\n\n{movie['summary']}"),
+                "responseFormat": "movie_detail",
+                "extraData": movie
+            }
+        }, ensure_ascii=False)
+
+    # 天气 Mock API
+    if "mock/weather" in path:
+        city = (query.get("city", ["成都"])[0]).strip() or "成都"
+        weather_map = {
+            "成都": {"desc": "多云转晴", "temp": 32, "humidity": 55, "wind": "东北风 3级", "aqi": 72},
+            "北京": {"desc": "晴", "temp": 28, "humidity": 35, "wind": "北风 4级", "aqi": 45},
+            "上海": {"desc": "小雨", "temp": 26, "humidity": 78, "wind": "东南风 2级", "aqi": 58},
+            "广州": {"desc": "雷阵雨", "temp": 33, "humidity": 82, "wind": "南风 3级", "aqi": 40},
+            "深圳": {"desc": "多云", "temp": 31, "humidity": 68, "wind": "西南风 2级", "aqi": 35},
+            "杭州": {"desc": "阴转多云", "temp": 29, "humidity": 62, "wind": "东风 2级", "aqi": 55},
+            "武汉": {"desc": "晴", "temp": 34, "humidity": 45, "wind": "南风 3级", "aqi": 60},
+            "西安": {"desc": "多云", "temp": 30, "humidity": 40, "wind": "东北风 2级", "aqi": 68},
+            "重庆": {"desc": "阴", "temp": 35, "humidity": 70, "wind": "北风 1级", "aqi": 80},
+        }
+        data = weather_map.get(city, weather_map["成都"])
+        text = (
+            f"【{city}天气】\n"
+            f"天气：{data['desc']}\n"
+            f"温度：{data['temp']}°C\n"
+            f"湿度：{data['humidity']}%\n"
+            f"风力：{data['wind']}\n"
+            f"空气质量指数(AQI)：{data['aqi']}"
+        )
+        return json.dumps({
+            "success": True,
+            "data": {
+                "content": text,
+                "responseFormat": "weather_card",
+                "extraData": dict(data, city=city)
+            }
+        }, ensure_ascii=False)
+
+    # 默认：原样返回（未知的内置 API）
+    return json.dumps({"success": False, "message": f"未知的内置 API: {path}"}, ensure_ascii=False)

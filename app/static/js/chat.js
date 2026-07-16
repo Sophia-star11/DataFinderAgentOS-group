@@ -34,6 +34,7 @@
     els.messageList = $('#messageList');
     els.inputText = $('#inputText');
     els.sendBtn = $('#sendBtn');
+    els.imgGenBtn = $('#imgGenBtn');
     els.modelSelect = $('#modelSelect');
     els.taskList = $('#taskList');
     els.sidebarTasks = $('#sidebarTasks');
@@ -77,6 +78,23 @@
       newConversation();
     } else {
       switchConversation(state.conversations[0].id);
+    }
+    // 检查是否有手势页面跳转过来的意图
+    var gesturePrompt = sessionStorage.getItem('gesture_prompt');
+    var gestureEmployee = sessionStorage.getItem('gesture_employee');
+    if (gesturePrompt) {
+      sessionStorage.removeItem('gesture_prompt');
+      sessionStorage.removeItem('gesture_employee');
+      els.inputText.value = gesturePrompt;
+      if (gestureEmployee) {
+        var emp = state.employees.find(function(e) { return e.name === gestureEmployee; });
+        if (emp) {
+          state.activeEmployee = { id: emp.id, name: emp.name };
+          els.employeeTagName.textContent = '@' + emp.name;
+          els.inputTag.style.display = 'inline-flex';
+        }
+      }
+      setTimeout(function() { sendMessage(); }, 500);
     }
   }
 
@@ -413,7 +431,12 @@
     }
     els.welcomeArea.style.display = 'none';
     state.messages.forEach((msg, idx) => {
-      appendMessageDOM(msg.role, msg.content, msg.employee_name, false);
+      appendMessageDOM(msg.role, msg.content, msg.employee_name, false, {
+        responseFormat: msg.employee_response_format,
+        extraData: msg.extra_data,
+        tokens: msg.tokens,
+        timeMs: msg.time_ms
+      });
     });
     scrollToBottom();
   }
@@ -460,6 +483,79 @@
             <div class="weather-card-item"><span>💨 风速</span><span>${d.wind_speed} km/h ${d.wind_dir}</span></div>
             <div class="weather-card-item"><span>👁 能见度</span><span>${d.visibility} km</span></div>
             <div class="weather-card-item"><span>📊 气压</span><span>${d.pressure} hPa</span></div>
+          </div>
+        </div>
+      `;
+      bubble.appendChild(card);
+    }
+
+    // 渲染新闻卡片列表
+    if (role === 'ai' && extra.responseFormat === 'news_list' && extra.extraData?.list) {
+      const news = extra.extraData.list;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      let html = '<div class="data-card-header">📰 热门新闻速递</div><div class="news-list" style="padding:4px 0;">';
+      news.forEach(function(item, idx) {
+        html += `
+          <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.1);${idx === news.length-1 ? 'border-bottom:none;' : ''}">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">
+              <a href="${item.link}" target="_blank" style="color:#64b5f6;text-decoration:none;">${item.title}</a>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:4px;">
+              📍 ${item.source}  🕐 ${item.time}
+            </div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.5;">${item.summary}</div>
+          </div>`;
+      });
+      html += '</div>';
+      card.innerHTML = html;
+      bubble.appendChild(card);
+    }
+
+    // 渲染音乐播放器
+    if (role === 'ai' && extra.responseFormat === 'music_player' && extra.extraData?.url) {
+      const d = extra.extraData;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      card.innerHTML = `
+        <div class="data-card-header">🎵 随机音乐推荐</div>
+        <div style="display:flex;align-items:center;padding:12px;">
+          <img src="${d.cover || 'https://picsum.photos/seed/music/100/100'}" 
+               alt="${d.song}" 
+               style="width:80px;height:80px;border-radius:8px;object-fit:cover;margin-right:14px;"
+               onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22%3E%3Crect fill=%22%23ddd%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2220%22 y=%2248%22 font-size=%2212%22 fill=%22%23999%22%3E🎵%3C/text%3E%3C/svg%3E'">
+          <div style="flex:1;">
+            <div style="font-size:16px;font-weight:600;color:#fff;">${d.song}</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.7);margin:4px 0 8px;">${d.artist}</div>
+            <audio controls style="width:100%;height:36px;" preload="none">
+              <source src="${d.url}" type="audio/mpeg">
+              您的浏览器不支持 audio 标签
+            </audio>
+          </div>
+        </div>
+      `;
+      bubble.appendChild(card);
+    }
+
+    // 渲染电影详情
+    if (role === 'ai' && extra.responseFormat === 'movie_detail' && extra.extraData?.title) {
+      const d = extra.extraData;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      card.innerHTML = `
+        <div class="data-card-header">🎬 电影详情</div>
+        <div style="display:flex;padding:12px;gap:14px;">
+          <img src="${d.poster || 'https://picsum.photos/seed/movie/150/200'}" 
+               alt="${d.title}" 
+               style="width:120px;height:180px;border-radius:6px;object-fit:cover;flex-shrink:0;"
+               onerror="this.style.display='none'">
+          <div style="flex:1;">
+            <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:4px;">${d.title} <span style="font-size:13px;color:rgba(255,255,255,0.5);font-weight:400;">(${d.year})</span></div>
+            <div style="font-size:13px;color:#f9a825;margin-bottom:8px;">⭐ ${d.rating}</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:4px;"><b>导演：</b>${d.director}</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:8px;"><b>演员：</b>${(d.actors || []).join(' / ')}</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6;margin-bottom:10px;max-height:80px;overflow-y:auto;">${d.summary}</div>
+            <a href="${d.url}" target="_blank" style="display:inline-block;padding:6px 18px;background:#e74c3c;color:#fff;border-radius:4px;text-decoration:none;font-size:13px;">查看详情</a>
           </div>
         </div>
       `;
@@ -611,18 +707,22 @@
       bubble.appendChild(tableWrapper);
     }
 
-    // 渲染Markdown
-    const contentDiv = document.createElement('div');
-    if (window.markdownit && content) {
-      const md = window.markdownit({ html: true, linkify: true, breaks: true });
-      contentDiv.innerHTML = md.render(content);
-    } else if (content) {
-      contentDiv.textContent = content;
+    // 渲染Markdown（卡片类格式已自行展示内容，跳过文本避免重复）
+    const cardFormats = ['weather_card', 'news_list', 'music_player', 'movie_detail', 'data_card', 'chart_card'];
+    var contentDiv = null;
+    if (!cardFormats.includes(extra.responseFormat)) {
+      contentDiv = document.createElement('div');
+      if (window.markdownit && content) {
+        const md = window.markdownit({ html: true, linkify: true, breaks: true });
+        contentDiv.innerHTML = md.render(content);
+      } else if (content) {
+        contentDiv.textContent = content;
+      }
+      bubble.appendChild(contentDiv);
     }
-    bubble.appendChild(contentDiv);
 
     // 添加token/响应时间信息
-    if (role === 'ai' && (extra.tokens || extra.timeMs)) {
+    if (role === 'assistant' && (extra.tokens || extra.timeMs)) {
       const meta = document.createElement('div');
       meta.className = 'message-meta';
       const parts = [];
@@ -630,6 +730,16 @@
       if (extra.tokens !== undefined) parts.push(`token: ${extra.tokens}`);
       meta.textContent = parts.join(' · ');
       bubble.appendChild(meta);
+    }
+
+    // TTS 语音播报按钮
+    if (role === 'assistant' && content) {
+      const ttsBtn = document.createElement('button');
+      ttsBtn.className = 'tts-btn';
+      ttsBtn.title = '语音播报';
+      ttsBtn.innerHTML = '🔊';
+      ttsBtn.onclick = function() { toggleTTS(content, ttsBtn); };
+      bubble.appendChild(ttsBtn);
     }
 
     div.appendChild(avatar);
@@ -1053,6 +1163,8 @@
   function bindEvents() {
     // 发送
     els.sendBtn.addEventListener('click', sendMessage);
+    // 生图
+    els.imgGenBtn.addEventListener('click', imageGen);
     els.inputText.addEventListener('input', (e) => {
       onInput(e);
       autoResizeTextarea();
@@ -1116,6 +1228,72 @@
         hideQuickMenu();
       }
     });
+  }
+
+  // ---- 图片生成 ----
+  async function imageGen() {
+    const prompt = els.inputText.value.trim();
+    if (!prompt) return;
+    if (state.isGenerating) return;
+    state.isGenerating = true;
+    els.sendBtn.disabled = true;
+    els.imgGenBtn.disabled = true;
+
+    appendMessageDOM('user', '🎨 生成图片: ' + prompt);
+    els.inputText.value = '';
+
+    const placeholder = appendMessageDOM('assistant', '🎨 正在生成图片...');
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append('prompt', prompt);
+      formData.append('_xsrf', getCookie('_xsrf'));
+      const resp = await fetch(getXsrfUrl('/api/user/image-gen'), {
+        method: 'POST',
+        body: formData,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+      const data = await resp.json();
+
+      placeholder.container.remove();
+      if (data.ok && data.image_url) {
+        const imgDiv = appendMessageDOM('assistant', '', '图片生成', true);
+        const img = document.createElement('img');
+        img.src = data.image_url;
+        img.style.cssText = 'max-width:100%;border-radius:12px;margin-top:8px;';
+        img.onerror = function() { img.alt = '图片加载失败，URL: ' + data.image_url; };
+        imgDiv.bubble.appendChild(img);
+      } else {
+        appendMessageDOM('assistant', '❌ ' + (data.msg || '生成失败'));
+      }
+    } catch (e) {
+      placeholder.container.remove();
+      appendMessageDOM('assistant', '❌ 请求失败: ' + e.message);
+    } finally {
+      state.isGenerating = false;
+      els.sendBtn.disabled = false;
+      els.imgGenBtn.disabled = false;
+    }
+  }
+
+  // ---- TTS 语音播报 ----
+  let ttsUtterance = null;
+
+  function toggleTTS(text, btn) {
+    if (ttsUtterance && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      btn.innerHTML = '🔊';
+      return;
+    }
+    const cleanText = text.replace(/<[^>]*>/g, '').replace(/[*#_`~>\[\]]/g, '').trim();
+    if (!cleanText) return;
+    ttsUtterance = new SpeechSynthesisUtterance(cleanText);
+    ttsUtterance.lang = 'zh-CN';
+    ttsUtterance.rate = 1.0;
+    ttsUtterance.onstart = function() { btn.innerHTML = '🔇'; };
+    ttsUtterance.onend = function() { btn.innerHTML = '🔊'; ttsUtterance = null; };
+    ttsUtterance.onerror = function() { btn.innerHTML = '🔊'; ttsUtterance = null; };
+    window.speechSynthesis.speak(ttsUtterance);
   }
 
   // ---- 启动 ----

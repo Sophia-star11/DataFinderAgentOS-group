@@ -1,5 +1,8 @@
 import json
 from .db import get_connection
+from app.utils.logger import get_logger
+
+logger = get_logger('digital_employee')
 
 class DigitalEmployeeRepository:
 
@@ -75,7 +78,7 @@ class DigitalEmployeeRepository:
             conn.commit()
             return cur.lastrowid
         except Exception as e:
-            print(f"[DigitalEmployee] create error: {e}")
+            logger.error(f"create error: {e}")
             return None
         finally:
             conn.close()
@@ -103,7 +106,7 @@ class DigitalEmployeeRepository:
                 return True
             return False
         except Exception as e:
-            print(f"[DigitalEmployee] update error: {e}")
+            logger.error(f"update error: {e}")
             return False
         finally:
             conn.close()
