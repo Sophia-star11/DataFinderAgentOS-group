@@ -60,6 +60,7 @@ def run_migrations():
             _migrate_skill_table,
             _migrate_skill_function,
             _migrate_skill_seed,
+            _migrate_skill_seed_plus,
         ]
         
         for migration in migrations:
@@ -1104,3 +1105,52 @@ def _migrate_skill_seed(conn):
             )
         )
         logger.info("已预置技能：今日热点摘要")
+
+
+def _migrate_skill_seed_plus(conn):
+    """预置更多预设技能：天气查询、电影搜索、数据采集助手"""
+    skills = [
+        {
+            "name": "天气查询",
+            "code": "weather_query",
+            "impl_type": "api_call",
+            "impl_config": {"url": "http://localhost:10010/api/mock/weather", "method": "GET", "headers": {}, "params": {"city": "{city}"}},
+            "description": "查询指定城市的实时天气信息，包括温度、湿度、风向、气压、能见度等详细数据"
+        },
+        {
+            "name": "电影搜索",
+            "code": "movie_search",
+            "impl_type": "api_call",
+            "impl_config": {"url": "http://localhost:10010/api/mock/movie", "method": "GET", "headers": {}, "params": {"keyword": "{keyword}"}},
+            "description": "通过TMDB API搜索电影信息，返回包含海报、评分、简介的电影列表"
+        },
+        {
+            "name": "数据采集助手",
+            "code": "data_collector",
+            "impl_type": "prompt",
+            "impl_config": {
+                "system_prompt": "你是一个数据采集与分析助手。你的任务是根据用户提供的URL或查询需求，帮助用户理解如何采集和分析数据。请给出清晰的步骤和建议。",
+                "user_template": "用户需求：{user_input}\n请提供数据采集和分析方案。"
+            },
+            "description": "帮助用户规划数据采集方案，提供URL爬取策略和数据分析建议"
+        },
+    ]
+    for sk in skills:
+        existing = conn.execute("SELECT id FROM skills WHERE code=?", (sk["code"],)).fetchone()
+        if not existing:
+            conn.execute(
+                """INSERT INTO skills (name, code, type, impl_type, impl_config, input_schema, output_schema, status, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    sk["name"],
+                    sk["code"],
+                    "builtin",
+                    sk["impl_type"],
+                    json.dumps(sk["impl_config"], ensure_ascii=False),
+                    json.dumps({"type": "object", "properties": {}}, ensure_ascii=False),
+                    json.dumps({"type": "object"}, ensure_ascii=False),
+                    1,
+                    sk["description"]
+                )
+            )
+            logger.info(f"已预置技能：{sk['name']}")
