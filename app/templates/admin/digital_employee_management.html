@@ -560,7 +560,6 @@ layui.use(['form', 'layer', 'jquery'], function(){
         uploadedMdFiles = [];
         $('#mdFileList').hide().empty();
         loadModels(null);
-        loadSkills([]);
         form.val('employeeForm', {type:'llm', status:'1', sort_order:'0'});
         toggleEmployeeType();
         form.render();
@@ -569,6 +568,8 @@ layui.use(['form', 'layer', 'jquery'], function(){
             content:$('#employeeFormModal'),
             cancel:function(idx){layer.close(idx);}
         });
+        // 弹窗后再加载技能（异步timing修复）
+        setTimeout(function() { loadSkills([]); }, 200);
     });
     $('#cancelBtn').on('click', function() {
         layer.closeAll();
@@ -777,7 +778,6 @@ layui.use(['form', 'layer', 'jquery'], function(){
                     var skillsData = typeof d.skills === 'string' ? JSON.parse(d.skills) : d.skills;
                     if (Array.isArray(skillsData)) selectedSkillIds = skillsData.map(function(s) { return String(s); });
                 } catch(e) {}
-                loadSkills(selectedSkillIds);
                 if (d.crawl4ai_enabled == 1) {
                     $('input[name="crawl4ai_enabled"]').prop('checked', true);
                 } else {
@@ -790,6 +790,8 @@ layui.use(['form', 'layer', 'jquery'], function(){
                     content:$('#employeeFormModal'),
                     cancel:function(idx){layer.close(idx);}
                 });
+                // 弹窗后再加载技能（异步timing修复）
+                setTimeout(function() { loadSkills(selectedSkillIds); }, 200);
                 // 加载已存在的 .md 文件
                 uploadedMdFiles = [];
                 loadExistingMdFiles(d.name);
