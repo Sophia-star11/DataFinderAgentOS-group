@@ -707,6 +707,26 @@ if __name__ == '__main__':
             )
             print("✓ 已内置数字员工：电影")
 
+        # 6. 小dummy（文案生成助手）（LLM型）
+        dummy_emp = conn.execute("SELECT id FROM digital_employees WHERE name LIKE '%小dummy%'").fetchone()
+        if not dummy_emp:
+            conn.execute(
+                """INSERT INTO digital_employees 
+                   (name, type, description, model_id, system_prompt, skills, crawl4ai_enabled, sort_order, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "小dummy（文案生成助手）",
+                    "llm",
+                    "具有特定步骤的文案生成助手",
+                    model_id,
+                    "你是小dummy，一个专业的文案生成助手。请严格按照工作步骤执行任务：分析需求→查阅模板→撰写大纲→生成正文→润色优化。",
+                    json.dumps([{"name": "文案生成", "description": "按照工作步骤生成专业文案", "action": "copywriting"}], ensure_ascii=False),
+                    0,
+                    6, 1
+                )
+            )
+            print("✓ 已内置数字员工：小dummy（文案生成助手）")
+
         # 迁移：更新已有天气数字员工的API配置（OpenWeatherMap → wttr.in）
         weather_emp = conn.execute("SELECT id, api_url FROM digital_employees WHERE name='天气'").fetchone()
         if weather_emp and weather_emp["api_url"] and "openweathermap" in weather_emp["api_url"]:
