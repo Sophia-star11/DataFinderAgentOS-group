@@ -1,4 +1,5 @@
-import os
+import os, sys
+sys.stdout.reconfigure(encoding='utf-8')
 import tornado.ioloop
 import tornado.web
 from tornado.httpserver import HTTPServer
@@ -12,7 +13,16 @@ from app.controllers.user_chat import (
     UserConversationsApiHandler,
     UserChatApiHandler
 )
-from app.controllers.home import IndexHandler, AdminIndexHandler, DashboardStatsApiHandler
+from app.controllers.multimodal import ImageGenHandler, VideoGenHandler
+from app.controllers.user_export import UserExportPdfApiHandler
+from app.controllers.home import (IndexHandler, GestureHandler, AdminIndexHandler, DashboardStatsApiHandler,
+    DataScreenHandler, DataScreenStatsApiHandler, DataScreenWordcloudApiHandler,
+    DataScreenTrendsApiHandler, DataScreenSourceApiHandler, DataScreenSankeyApiHandler,
+    OpinionScreenHandler, OpinionWarningsApiHandler, OpinionStatsApiHandler,
+    OpinionAIAnalyzeApiHandler, OpinionAcknowledgeApiHandler, OpinionFeedbackApiHandler,
+    OpinionScanApiHandler, SensitiveWordsApiHandler, SensitiveWordsCreateApiHandler,
+    SensitiveWordsUpdateApiHandler, SensitiveWordsDeleteApiHandler)
+from app.controllers.auth import FaceLoginHandler
 from app.controllers.admin_user import (
     UserManagementHandler,
     UserListApiHandler,
@@ -115,7 +125,7 @@ def webapp():
     settings = dict(
         template_path=os.path.join(base_dir, "app", "templates"),
         static_path=os.path.join(base_dir, "app", "static"),
-        cookie_secret="datafinderagentos-token",
+        cookie_secret=os.environ.get("COOKIE_SECRET", "datafinderagentos-token"),
         login_url="/",
         xsrf_cookies=True,
         debug=True,
@@ -129,6 +139,8 @@ def webapp():
         (r"/chat", UserChatHandler),
         (r"/logout", LogoutHandler),
         (r"/index", IndexHandler),
+        (r"/gesture", GestureHandler),
+        (r"/face-login", FaceLoginHandler),
         # 后台路由
         (r"/admin/", AdminLoginHandler),
         (r"/admin/login", AdminLoginHandler),
@@ -136,6 +148,25 @@ def webapp():
         (r"/admin/index", AdminIndexHandler),
         # 控制台统计数据API（实时刷新用）
         (r"/api/dashboard/stats", DashboardStatsApiHandler),
+        # 数智大屏
+        (r"/admin/data-screen", DataScreenHandler),
+        (r"/api/data-screen/stats", DataScreenStatsApiHandler),
+        (r"/api/data-screen/wordcloud", DataScreenWordcloudApiHandler),
+        (r"/api/data-screen/trends", DataScreenTrendsApiHandler),
+        (r"/api/data-screen/source", DataScreenSourceApiHandler),
+        (r"/api/data-screen/sankey", DataScreenSankeyApiHandler),
+        # 舆情大屏
+        (r"/admin/opinion-screen", OpinionScreenHandler),
+        (r"/api/opinion/stats", OpinionStatsApiHandler),
+        (r"/api/opinion/warnings", OpinionWarningsApiHandler),
+        (r"/api/opinion/ai-analyze", OpinionAIAnalyzeApiHandler),
+        (r"/api/opinion/acknowledge", OpinionAcknowledgeApiHandler),
+        (r"/api/opinion/feedback", OpinionFeedbackApiHandler),
+        (r"/api/opinion/scan", OpinionScanApiHandler),
+        (r"/api/opinion/sensitive-words", SensitiveWordsApiHandler),
+        (r"/api/opinion/sensitive-words/create", SensitiveWordsCreateApiHandler),
+        (r"/api/opinion/sensitive-words/update", SensitiveWordsUpdateApiHandler),
+        (r"/api/opinion/sensitive-words/delete", SensitiveWordsDeleteApiHandler),
         # 用户管理
         (r"/admin/user-management", UserManagementHandler),
         (r"/api/users/list", UserListApiHandler),
@@ -228,6 +259,9 @@ def webapp():
         (r"/api/user/digital-employees", UserDigitalEmployeesApiHandler),
         (r"/api/user/conversations", UserConversationsApiHandler),
         (r"/api/user/chat", UserChatApiHandler),
+        (r"/api/user/image-gen", ImageGenHandler),
+        (r"/api/user/video-gen", VideoGenHandler),
+        (r"/api/user/export/pdf", UserExportPdfApiHandler),
     ],
     **settings
     )
@@ -400,13 +434,35 @@ if __name__ == '__main__':
                 "sec-ch-ua-platform": "Windows"
             }
             conn.execute(
-                """INSERT INTO watch_sources (name, url_template, method, headers, keyword_param, page_param, page_step, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO watch_sources (name, url_template, method, headers, keyword_param, page_param, page_step, status, source_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 ("百度新闻", "https://www.baidu.com/s?rtt=1&bsst=1&cl=2&tn=news&rsv_dl=ns_pc&",
-                 "GET", json.dumps(baidu_headers, ensure_ascii=False), "word", "pn", 10, 1)
+                 "GET", json.dumps(baidu_headers, ensure_ascii=False), "word", "pn", 10, 1, "baidu_news")
             )
-            print("✓ 已初始化「百度新闻」瞭源规则")
-        
+            print("✓ 已初始化「百度新闻」瞭源规则 (baidu_news)")
+
+        # 初始化 Hacker News JSON API 瞭源（如果不存在）
+        hn_exists = conn.execute("SELECT id FROM watch_sources WHERE name='Hacker News'").fetchone()
+        if not hn_exists:
+            conn.execute(
+                """INSERT INTO watch_sources (name, url_template, method, headers, keyword_param, page_param, page_step, status, source_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("Hacker News", "https://hn.algolia.com/api/v1/search?",
+                 "GET", "{}", "query", "page", 1, 1, "json_api")
+            )
+            print("✓ 已初始化「Hacker News」瞭源规则 (json_api)")
+
+        # 初始化 36氪 RSS 瞭源（如果不存在）
+        kr36_exists = conn.execute("SELECT id FROM watch_sources WHERE name='36氪 RSS'").fetchone()
+        if not kr36_exists:
+            conn.execute(
+                """INSERT INTO watch_sources (name, url_template, method, headers, keyword_param, page_param, page_step, status, source_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("36氪 RSS", "https://36kr.com/feed",
+                 "GET", "{}", "", "", 0, 1, "rss")
+            )
+            print("✓ 已初始化「36氪 RSS」瞭源规则 (rss)")
+
         # 初始化模型引擎功能（如果不存在）
         me_func = conn.execute("SELECT id FROM functions WHERE code='model_engine'").fetchone()
         if not me_func:
@@ -454,7 +510,25 @@ if __name__ == '__main__':
                 ("Claude 3.5 Sonnet", "anthropic", "claude-3-5-sonnet-latest", "https://api.anthropic.com/v1", "sk-ant-your-key-here",
                  200000, 0, 0, 1, 3, "text", "You are a helpful assistant.", 0.7, 1.0, 200000)
             )
-            print("✓ 已初始化 3 个示例AI模型（GPT-4o为默认模型）")
+            # 多模态模型：生图
+            conn.execute(
+                """INSERT INTO ai_models (name, provider, model_name, api_base_url, api_key,
+                   max_tokens, token_count, is_default, status, sort_order, category,
+                   system_prompt, temperature, top_p, context_length)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("DALL-E 3", "openai", "dall-e-3", "https://aigc.aitoolcore.com/v1", "",
+                 0, 0, 0, 1, 4, "image", "", 0.7, 1.0, 4096)
+            )
+            # 多模态模型：生视频
+            conn.execute(
+                """INSERT INTO ai_models (name, provider, model_name, api_base_url, api_key,
+                   max_tokens, token_count, is_default, status, sort_order, category,
+                   system_prompt, temperature, top_p, context_length)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("Sora/视频生成", "openai", "video-gen", "https://aigc.aitoolcore.com/v1", "",
+                 0, 0, 0, 1, 5, "video", "", 0.7, 1.0, 4096)
+            )
+            print("✓ 已初始化 5 个AI模型（含生文/生图/生视频，GPT-4o为默认模型）")
         
         # 初始化智能中枢功能（如果不存在）
         hub_func = conn.execute("SELECT id FROM functions WHERE code='intelligent_hub'").fetchone()
@@ -612,6 +686,71 @@ if __name__ == '__main__':
                 )
             )
             print("✓ 已迁移天气员工参数（format=%C... → format=j1，支持中文输出）")
+
+        # ============================================================
+        # 迁移旧版 big_screen → data_screen（兼容已有数据库）
+        # ============================================================
+        old_bs = conn.execute("SELECT id FROM functions WHERE code='big_screen'").fetchone()
+        if old_bs:
+            conn.execute("UPDATE functions SET code='data_screen', route='/admin/data-screen' WHERE code='big_screen'")
+            print("✓ 已迁移旧版 big_screen → data_screen")
+
+        # ============================================================
+        # 创建数智大屏功能（如果不存在）
+        # ============================================================
+        ds_func = conn.execute("SELECT id FROM functions WHERE code='data_screen'").fetchone()
+        if not ds_func:
+            hub_func = conn.execute("SELECT id FROM functions WHERE code='intelligent_hub'").fetchone()
+            parent_id = hub_func["id"] if hub_func else 0
+            conn.execute(
+                "INSERT INTO functions (name, code, icon, route, sort_order, parent_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("数智大屏", "data_screen", "layui-icon-chart-screen", "/admin/data-screen", 3, parent_id, 1)
+            )
+            print("✓ 已创建「数智大屏」功能")
+
+        # ============================================================
+        # 创建舆情大屏功能（如果不存在）
+        # ============================================================
+        op_func = conn.execute("SELECT id FROM functions WHERE code='opinion_screen'").fetchone()
+        if not op_func:
+            hub_func = conn.execute("SELECT id FROM functions WHERE code='intelligent_hub'").fetchone()
+            parent_id = hub_func["id"] if hub_func else 0
+            conn.execute(
+                "INSERT INTO functions (name, code, icon, route, sort_order, parent_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("舆情大屏", "opinion_screen", "layui-icon-flag", "/admin/opinion-screen", 4, parent_id, 1)
+            )
+            print("✓ 已创建「舆情大屏」功能")
+        else:
+            # 保证已有数据的图标正确
+            conn.execute("UPDATE functions SET icon='layui-icon-flag' WHERE code='opinion_screen' AND icon!='layui-icon-flag'")
+
+        # ============================================================
+        # 迁移旧版敏感词 → 攻击防护词库
+        # ============================================================
+        old_words = conn.execute("SELECT word FROM sensitive_words WHERE word IN ('数据泄露','黑客','漏洞','攻击','违规','投诉','宕机','故障','崩溃','异常','虚假','误导','谣言')").fetchall()
+        if old_words:
+            conn.execute("DELETE FROM sensitive_words")
+            new_words = [
+                ("DROP TABLE", "SQL注入", "high"), ("DELETE FROM", "SQL注入", "high"),
+                ("TRUNCATE", "SQL注入", "high"), ("ALTER TABLE", "SQL注入", "high"),
+                ("UNION SELECT", "SQL注入", "high"), ("1=1", "SQL注入", "high"),
+                ("' OR '", "SQL注入", "high"),
+                ("exec(", "代码注入", "high"), ("system(", "代码注入", "high"),
+                ("eval(", "代码注入", "high"), ("__import__", "代码注入", "high"),
+                ("subprocess", "代码注入", "high"), ("os.system", "代码注入", "high"),
+                ("{{", "SSTI注入", "high"), ("{%", "SSTI注入", "high"), ("${", "SSTI注入", "high"),
+                ("admin密码", "越权试探", "high"), ("后台地址", "越权试探", "high"),
+                ("管理员账号", "越权试探", "high"), ("绕过验证", "越权试探", "high"),
+                ("忽略你之前的指令", "Prompt注入", "high"), ("忽略系统提示", "Prompt注入", "high"),
+                ("ignore above", "Prompt注入", "high"), ("ignore all", "Prompt注入", "high"),
+                ("假装你是", "Prompt注入", "medium"), ("你现在是", "Prompt注入", "medium"),
+                ("role play", "Prompt注入", "medium"),
+                ("你傻", "恶意骚扰", "medium"), ("废物", "恶意骚扰", "medium"),
+                ("垃圾", "恶意骚扰", "medium"),
+            ]
+            for word, cat, sev in new_words:
+                conn.execute("INSERT OR IGNORE INTO sensitive_words (word, category, severity) VALUES (?, ?, ?)", (word, cat, sev))
+            print("✓ 已迁移敏感词库为攻击防护词库（共 {} 个）".format(len(new_words)))
 
         # ============================================================
         # 通用保障：确保所有已启用的功能都已分配给admin角色并创建菜单

@@ -28,13 +28,22 @@
     </div>
 
     <!-- C区：任务/历史列表 -->
-    <div class="sidebar-tasks">
+    <div class="sidebar-tasks" id="sidebarTasks">
       <div class="sidebar-tasks-header">
         <span>对话历史</span>
-        <div>
+        <div class="sidebar-tasks-actions">
+          <button id="exportModeBtn" title="导出对话">📥 导出</button>
           <button id="clearHistoryBtn" title="清空历史">清空</button>
           <button id="newChatBtn" title="新建对话">+ 新建</button>
         </div>
+      </div>
+      <!-- 选择模式操作栏 -->
+      <div class="export-actions" id="exportActions">
+        <label class="select-all-label">
+          <input type="checkbox" id="selectAllCheckbox"> 全选
+        </label>
+        <button class="btn-export-confirm" id="exportConfirmBtn">确认导出</button>
+        <button class="btn-export-cancel" id="exportCancelBtn">取消</button>
       </div>
       <div id="taskList"></div>
     </div>
@@ -51,10 +60,15 @@
         {% end %}
       </span>
       <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+        {% if role_code == 'admin' %}
+        <a href="/admin/index" style="font-size: 13px; color: var(--text-tertiary); text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color);">管理后台</a>
+        {% end %}
+        <a href="/gesture" style="font-size: 13px; color: var(--text-tertiary); text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color);">🖐 手势</a>
+        <a href="/face-login" style="font-size: 13px; color: var(--text-tertiary); text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color);">👤 人脸</a>
         <a href="/index" style="font-size: 13px; color: var(--text-tertiary); text-decoration: none; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color);">首页</a>
         <form method="post" action="/logout" style="margin:0; padding:0; display:inline;" id="logoutForm">
           {% module xsrf_form_html() %}
-          <button type="submit" style="font-size: 13px; color: var(--text-tertiary); background: none; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; cursor: pointer;">退出</button>
+          <button type="submit" style="font-size: 13px; color: var(--text-tertiary); background: none; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 10px; cursor: pointer;">退出登录</button>
         </form>
       </div>
     </div>
@@ -99,6 +113,7 @@
         <div class="input-row">
           <textarea id="inputText" rows="1" placeholder="输入消息，输入 / 使用快捷功能，输入 @ 调用数字员工..." autofocus></textarea>
           <div class="input-actions">
+            <button class="btn-img" id="imgGenBtn" title="生成图片">🎨</button>
             <button class="btn-send" id="sendBtn" title="发送 (Enter)">➤</button>
           </div>
         </div>
