@@ -796,7 +796,28 @@ if __name__ == '__main__':
         conn.close()
     except Exception as e:
         print(f"⚠ 初始化默认数据出错: {e}")
-    
+
+    # ============================================================
+    # 深度采集任务重启恢复：将 running/pending 任务标记为 failed
+    # ============================================================
+    try:
+        from app.models.db import get_connection
+        conn = get_connection()
+        stalled = conn.execute(
+            "SELECT COUNT(*) FROM deep_collect_tasks WHERE status IN ('running', 'pending')"
+        ).fetchone()[0]
+        if stalled > 0:
+            now = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute(
+                "UPDATE deep_collect_tasks SET status='failed', error_message=?, updated_at=? WHERE status IN ('running', 'pending')",
+                (f"服务器重启，任务中断（{now}）", now)
+            )
+            conn.commit()
+            print(f"✓ 已恢复 {stalled} 个中断的深度采集任务（标记为 failed）")
+        conn.close()
+    except Exception as e:
+        print(f"⚠ 深度采集任务恢复出错: {e}")
+
     webapp = webapp()
     # 将应用程序部署到服务器
     server = HTTPServer(webapp)
