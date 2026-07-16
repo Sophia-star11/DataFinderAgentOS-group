@@ -13,14 +13,16 @@ from app.controllers.user_chat import (
     UserConversationsApiHandler,
     UserChatApiHandler
 )
+from app.controllers.multimodal import ImageGenHandler, VideoGenHandler
 from app.controllers.user_export import UserExportPdfApiHandler
-from app.controllers.home import (IndexHandler, AdminIndexHandler, DashboardStatsApiHandler,
+from app.controllers.home import (IndexHandler, GestureHandler, AdminIndexHandler, DashboardStatsApiHandler,
     DataScreenHandler, DataScreenStatsApiHandler, DataScreenWordcloudApiHandler,
     DataScreenTrendsApiHandler, DataScreenSourceApiHandler, DataScreenSankeyApiHandler,
     OpinionScreenHandler, OpinionWarningsApiHandler, OpinionStatsApiHandler,
     OpinionAIAnalyzeApiHandler, OpinionAcknowledgeApiHandler, OpinionFeedbackApiHandler,
     OpinionScanApiHandler, SensitiveWordsApiHandler, SensitiveWordsCreateApiHandler,
     SensitiveWordsUpdateApiHandler, SensitiveWordsDeleteApiHandler)
+from app.controllers.auth import FaceLoginHandler
 from app.controllers.admin_user import (
     UserManagementHandler,
     UserListApiHandler,
@@ -137,6 +139,8 @@ def webapp():
         (r"/chat", UserChatHandler),
         (r"/logout", LogoutHandler),
         (r"/index", IndexHandler),
+        (r"/gesture", GestureHandler),
+        (r"/face-login", FaceLoginHandler),
         # 后台路由
         (r"/admin/", AdminLoginHandler),
         (r"/admin/login", AdminLoginHandler),
@@ -255,6 +259,8 @@ def webapp():
         (r"/api/user/digital-employees", UserDigitalEmployeesApiHandler),
         (r"/api/user/conversations", UserConversationsApiHandler),
         (r"/api/user/chat", UserChatApiHandler),
+        (r"/api/user/image-gen", ImageGenHandler),
+        (r"/api/user/video-gen", VideoGenHandler),
         (r"/api/user/export/pdf", UserExportPdfApiHandler),
     ],
     **settings
@@ -504,7 +510,25 @@ if __name__ == '__main__':
                 ("Claude 3.5 Sonnet", "anthropic", "claude-3-5-sonnet-latest", "https://api.anthropic.com/v1", "sk-ant-your-key-here",
                  200000, 0, 0, 1, 3, "text", "You are a helpful assistant.", 0.7, 1.0, 200000)
             )
-            print("✓ 已初始化 3 个示例AI模型（GPT-4o为默认模型）")
+            # 多模态模型：生图
+            conn.execute(
+                """INSERT INTO ai_models (name, provider, model_name, api_base_url, api_key,
+                   max_tokens, token_count, is_default, status, sort_order, category,
+                   system_prompt, temperature, top_p, context_length)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("DALL-E 3", "openai", "dall-e-3", "https://aigc.aitoolcore.com/v1", "",
+                 0, 0, 0, 1, 4, "image", "", 0.7, 1.0, 4096)
+            )
+            # 多模态模型：生视频
+            conn.execute(
+                """INSERT INTO ai_models (name, provider, model_name, api_base_url, api_key,
+                   max_tokens, token_count, is_default, status, sort_order, category,
+                   system_prompt, temperature, top_p, context_length)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("Sora/视频生成", "openai", "video-gen", "https://aigc.aitoolcore.com/v1", "",
+                 0, 0, 0, 1, 5, "video", "", 0.7, 1.0, 4096)
+            )
+            print("✓ 已初始化 5 个AI模型（含生文/生图/生视频，GPT-4o为默认模型）")
         
         # 初始化智能中枢功能（如果不存在）
         hub_func = conn.execute("SELECT id FROM functions WHERE code='intelligent_hub'").fetchone()
