@@ -4,7 +4,10 @@
 .data-table .table-wrap { overflow-x: auto; }
 .data-table table { min-width: 700px; }
 .data-table td:last-child { white-space: nowrap; }
+.data-table td, .data-table th { vertical-align: middle !important; text-align: center; }
 .data-table .desc-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-text { overflow: hidden !important; text-overflow: ellipsis; white-space: nowrap !important; width: 260px; display: inline-block; height: 22px; line-height: 22px; vertical-align: middle; }
+.cell-empty { color: #999; }
 .type-badge-llm { background: #6366f1 !important; }
 .type-badge-api { background: #0ea5e9 !important; }
 .badge-llm { display:inline-block; padding:2px 10px; border-radius:4px; font-size:12px; line-height:20px; font-weight:500; background:#eef2ff; color:#4f46e5; }
@@ -291,24 +294,22 @@
     </div>
 </div>
 
-<!-- 测试结果弹窗 -->
+<!-- 测试对话弹窗 -->
 <div style="display:none;" id="testModal">
-    <div style="padding:20px;">
-        <div style="margin-bottom:15px;">
-            <label style="font-weight:600;color:#475569;font-size:13px;display:block;margin-bottom:5px;">测试消息</label>
-            <div style="color:#1e293b;font-size:14px;background:#f8fafc;padding:10px;border-radius:4px;border:1px solid #e2e8f0;" id="testMessage">-</div>
+    <div style="display:flex;flex-direction:column;height:450px;padding:0;">
+        <div style="flex:1;overflow-y:auto;padding:15px;background:#f5f6fa;" id="testChatBody">
+            <div style="text-align:center;color:#999;padding:40px 0;font-size:14px;" id="testChatPlaceholder">
+                <i class="layui-icon layui-icon-face-smile" style="font-size:40px;display:block;margin-bottom:10px;color:#bbb;"></i>
+                输入消息开始对话测试
+            </div>
         </div>
-        <div id="testLoading" style="text-align:center;padding:30px;display:none;">
-            <i class="layui-icon layui-icon-face-smile" style="font-size:30px;color:#2563eb;"></i>
-            <p style="color:#64748b;margin-top:10px;">正在测试中，请稍候...</p>
-        </div>
-        <div id="testResult" style="display:none;">
-            <label style="font-weight:600;color:#475569;font-size:13px;display:block;margin-bottom:5px;">测试结果</label>
-            <div style="color:#1e293b;font-size:14px;background:#f8fafc;padding:10px;border-radius:4px;border:1px solid #e2e8f0;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;" id="testReply">-</div>
-        </div>
-        <div id="testError" style="display:none;">
-            <label style="font-weight:600;color:#dc2626;font-size:13px;display:block;margin-bottom:5px;">测试失败</label>
-            <div style="color:#dc2626;font-size:14px;background:#fef2f2;padding:10px;border-radius:4px;border:1px solid #fecaca;" id="testErrorMessage">-</div>
+        <div style="border-top:1px solid #e2e8f0;padding:10px 15px;background:#fff;display:flex;gap:8px;">
+            <input type="text" id="testChatInput" placeholder="输入消息，按 Enter 发送..."
+                   style="flex:1;border:1px solid #d9d9d9;border-radius:4px;padding:8px 12px;font-size:14px;outline:none;"
+                   onkeydown="if(event.key==='Enter') sendTestMessage()">
+            <button class="layui-btn" onclick="sendTestMessage()" style="white-space:nowrap;">
+                <i class="layui-icon layui-icon-senior"></i> 发送
+            </button>
         </div>
     </div>
 </div>
@@ -407,12 +408,12 @@ layui.use(['form', 'layer', 'jquery'], function(){
             url: '/api/digital-employees/skills', type: 'GET', dataType: 'json',
             success: function(res) {
                 var skills = res.data || [];
-                var html = '';
+                var html = '<option value="">不关联</option>';
                 skills.forEach(function(s) {
                     var sel = (selectedIds && selectedIds.indexOf(String(s.id)) !== -1) ? 'selected' : '';
                     html += '<option value="' + s.id + '" ' + sel + '>' + s.name + '</option>';
                 });
-                $('#skillSelect').html(html || '<option value="">(无可用技能)</option>');
+                $('#skillSelect').html(html);
                 form.render('select');
             },
             error: function() {
@@ -422,13 +423,21 @@ layui.use(['form', 'layer', 'jquery'], function(){
         });
     }
 
-    // 处理技能多选
+    // 处理技能多选：选中"不关联"时清除其他选择
     form.on('select(skillSelect)', function(data) {
-        var selectedValues = [];
-        $('#skillSelect option:selected').each(function() {
-            selectedValues.push($(this).val());
+        var $select = $('#skillSelect');
+        // 如果选中了"不关联"选项(value='')，则取消其他所有选项
+        var emptySelected = false;
+        $select.find('option[value=""]').each(function() {
+            if ($(this).prop('selected')) {
+                emptySelected = true;
+            }
         });
-        $('input[name="skill_ids"]').val(JSON.stringify(selectedValues));
+        if (emptySelected) {
+            $select.find('option').prop('selected', false);
+            $select.find('option[value=""]').prop('selected', true);
+            form.render('select');
+        }
     });
 
     // 加载已启用的API接口列表（供关联选择）
@@ -504,7 +513,7 @@ layui.use(['form', 'layer', 'jquery'], function(){
                         '<td>' + rowNum + '</td>' +
                         '<td>' + (item.name || '<span class="cell-empty">-</span>') + '</td>' +
                         '<td>' + typeHtml + '</td>' +
-                        '<td><div class="cell-text" title="' + (item.description||'').replace(/"/g,'&quot;') + '">' + (item.description || '<span class="cell-empty">-</span>') + '</div></td>' +
+                        '<td style="overflow:hidden;"><div class="cell-text">' + (item.description || '<span class="cell-empty">-</span>') + '</div></td>' +
                         '<td>' + (item.sort_order||0) + '</td>' +
                         '<td>' + statusHtml + '</td>' +
                         '<td>' + (item.created_at||'<span class="cell-empty">-</span>') + '</td>' +
@@ -561,7 +570,6 @@ layui.use(['form', 'layer', 'jquery'], function(){
         uploadedMdFiles = [];
         $('#mdFileList').hide().empty();
         loadModels(null);
-        loadSkills([]);
         form.val('employeeForm', {type:'llm', status:'1', sort_order:'0'});
         toggleEmployeeType();
         form.render();
@@ -570,6 +578,8 @@ layui.use(['form', 'layer', 'jquery'], function(){
             content:$('#employeeFormModal'),
             cancel:function(idx){layer.close(idx);}
         });
+        // 弹窗后再加载技能（异步timing修复）
+        setTimeout(function() { loadSkills([]); }, 200);
     });
     $('#cancelBtn').on('click', function() {
         layer.closeAll();
@@ -778,7 +788,6 @@ layui.use(['form', 'layer', 'jquery'], function(){
                     var skillsData = typeof d.skills === 'string' ? JSON.parse(d.skills) : d.skills;
                     if (Array.isArray(skillsData)) selectedSkillIds = skillsData.map(function(s) { return String(s); });
                 } catch(e) {}
-                loadSkills(selectedSkillIds);
                 if (d.crawl4ai_enabled == 1) {
                     $('input[name="crawl4ai_enabled"]').prop('checked', true);
                 } else {
@@ -791,6 +800,8 @@ layui.use(['form', 'layer', 'jquery'], function(){
                     content:$('#employeeFormModal'),
                     cancel:function(idx){layer.close(idx);}
                 });
+                // 弹窗后再加载技能（异步timing修复）
+                setTimeout(function() { loadSkills(selectedSkillIds); }, 200);
                 // 加载已存在的 .md 文件
                 uploadedMdFiles = [];
                 loadExistingMdFiles(d.name);
@@ -863,56 +874,101 @@ layui.use(['form', 'layer', 'jquery'], function(){
         });
     };
 
-    // 测试数字员工
+    // 测试数字员工（对话形式）
+    var testEmployeeId = null;
+    var testEmployeeName = '';
     window.testEmployee = function(id) {
+        testEmployeeId = id;
         // 先获取员工信息
         $.ajax({
             url: '/api/digital-employees/get', type: 'GET', dataType: 'json',
             data: {id: id},
             success: function(res) {
                 if (!res.success) { layer.msg(res.message, {icon:2}); return; }
-                var d = res.data;
-                var testMsg = '你好，请回复一条测试消息。';
-                $('#testMessage').text(testMsg);
-                $('#testResult').hide();
-                $('#testError').hide();
-                $('#testLoading').show();
-                $('#testReply').text('');
-                $('#testErrorMessage').text('');
+                testEmployeeName = res.data.name || '未知';
+                // 清空聊天区域
+                $('#testChatBody').html(
+                    '<div style="text-align:center;color:#999;padding:40px 0;font-size:14px;" id="testChatPlaceholder">' +
+                        '<i class="layui-icon layui-icon-face-smile" style="font-size:40px;display:block;margin-bottom:10px;color:#bbb;"></i>' +
+                        '输入消息开始对话测试</div>'
+                );
+                $('#testChatInput').val('').focus();
                 layer.open({
-                    type:1, title:'测试数字员工 - ' + (d.name || '未知'), area:['650px', '480px'],
+                    type:1, title:'对话测试 - ' + testEmployeeName, area:['650px', '520px'],
                     content:$('#testModal'),
-                    cancel:function(idx){layer.close(idx);}
+                    cancel:function(idx){ layer.close(idx); testEmployeeId = null; }
                 });
-                // 发送测试请求
-                $.ajax({
-                    url: '/api/digital-employees/test', type: 'POST', dataType: 'json',
-                    contentType: 'application/json',
-                    data: JSON.stringify({id: id, test_message: testMsg}),
-                    headers: {'X-XSRFToken': getXsrfToken()},
-                    success: function(testRes) {
-                        $('#testLoading').hide();
-                        if (testRes.success) {
-                            $('#testReply').text(testRes.reply || '(空响应)');
-                            $('#testResult').show();
-                        } else {
-                            $('#testErrorMessage').text(testRes.message || '测试失败');
-                            $('#testError').show();
-                        }
-                    },
-                    error: function(xhr) {
-                        $('#testLoading').hide();
-                        try {
-                            var errResp = JSON.parse(xhr.responseText);
-                            $('#testErrorMessage').text(errResp.message || '请求失败');
-                        } catch(e) {
-                            $('#testErrorMessage').text('请求失败，请检查网络连接');
-                        }
-                        $('#testError').show();
-                    }
-                });
+                // 弹出后聚焦输入框
+                setTimeout(function(){ $('#testChatInput').focus(); }, 300);
             },
             error: function() { layer.msg('获取数据失败', {icon:2}); }
+        });
+    };
+
+    // 全局发送消息函数
+    window.sendTestMessage = function() {
+        var input = $('#testChatInput');
+        var msg = input.val().trim();
+        if (!msg || !testEmployeeId) return;
+        input.val('');
+
+        // 移除占位提示
+        $('#testChatPlaceholder').remove();
+
+        // 添加用户消息气泡
+        $('#testChatBody').append(
+            '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">' +
+                '<div style="background:#2563eb;color:#fff;padding:8px 14px;border-radius:12px 12px 2px 12px;max-width:75%;word-break:break-word;font-size:14px;line-height:1.5;">' +
+                    $('<div>').text(msg).html() +
+                '</div>' +
+            '</div>'
+        );
+
+        // 添加加载气泡
+        var loadingId = 'msgLoading_' + Date.now();
+        $('#testChatBody').append(
+            '<div style="display:flex;justify-content:flex-start;margin-bottom:10px;" id="' + loadingId + '">' +
+                '<div style="background:#fff;color:#999;padding:8px 14px;border-radius:12px 12px 12px 2px;border:1px solid #e2e8f0;font-size:14px;">' +
+                    '思考中<i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="margin-left:4px;"></i>' +
+                '</div>' +
+            '</div>'
+        );
+
+        // 滚动到底部
+        $('#testChatBody').scrollTop($('#testChatBody')[0].scrollHeight);
+
+        // 发送请求
+        $.ajax({
+            url: '/api/digital-employees/test', type: 'POST', dataType: 'json',
+            contentType: 'application/json',
+            data: JSON.stringify({id: testEmployeeId, test_message: msg}),
+            headers: {'X-XSRFToken': getXsrfToken()},
+            success: function(testRes) {
+                $('#' + loadingId).remove();
+                var replyText = testRes.success ? (testRes.reply || '(空响应)') : (testRes.message || '测试失败');
+                var isError = !testRes.success;
+                $('#testChatBody').append(
+                    '<div style="display:flex;justify-content:flex-start;margin-bottom:10px;">' +
+                        '<div style="background:#fff;padding:8px 14px;border-radius:12px 12px 12px 2px;border:1px solid ' + (isError ? '#fecaca' : '#e2e8f0') + ';max-width:75%;word-break:break-word;font-size:14px;line-height:1.5;color:' + (isError ? '#dc2626' : '#1e293b') + ';">' +
+                            $('<div>').text(replyText).html() +
+                        '</div>' +
+                    '</div>'
+                );
+                $('#testChatBody').scrollTop($('#testChatBody')[0].scrollHeight);
+            },
+            error: function(xhr) {
+                $('#' + loadingId).remove();
+                var errText = '请求失败';
+                try { errText = JSON.parse(xhr.responseText).message || errText; } catch(e) {}
+                $('#testChatBody').append(
+                    '<div style="display:flex;justify-content:flex-start;margin-bottom:10px;">' +
+                        '<div style="background:#fff;padding:8px 14px;border-radius:12px 12px 12px 2px;border:1px solid #fecaca;max-width:75%;word-break:break-word;font-size:14px;color:#dc2626;">' +
+                            $('<div>').text(errText).html() +
+                        '</div>' +
+                    '</div>'
+                );
+                $('#testChatBody').scrollTop($('#testChatBody')[0].scrollHeight);
+            }
         });
     };
 

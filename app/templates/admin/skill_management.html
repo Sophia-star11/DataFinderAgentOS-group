@@ -4,10 +4,14 @@
 .data-table td, .data-table th { vertical-align: middle !important; text-align: center; }
 .data-table td:nth-child(2) { text-align: left; }
 .data-table td:nth-child(6) { text-align: left; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.badge-active { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; background: #e6f7e6; color: #389e0d; }
-.badge-inactive { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; background: #fff1f0; color: #cf1322; }
-.badge-builtin { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; background: #e6f0ff; color: #1890ff; }
-.badge-custom { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; background: #f0f0f0; color: #666; }
+.col-status { width: 70px; }
+.col-time { width: 150px; }
+.col-actions { width: 150px; min-width: 150px; text-align: center; }
+.action-btns { white-space: nowrap; }
+.badge-active { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; background: #e6f7e6; color: #389e0d; white-space: nowrap; }
+.badge-inactive { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; background: #fff1f0; color: #cf1322; white-space: nowrap; }
+.badge-builtin { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; background: #e6f0ff; color: #1890ff; white-space: nowrap; }
+.badge-custom { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; background: #f0f0f0; color: #666; white-space: nowrap; }
 .impl-section { margin-top: 10px; }
 .form-section-title { font-size: 14px; font-weight: bold; color: #333; padding: 10px 0 5px; border-bottom: 1px solid #eee; margin-bottom: 10px; }
 </style>
@@ -116,9 +120,9 @@
                         <th style="width:70px;">类型</th>
                         <th style="width:80px;">实现方式</th>
                         <th>描述</th>
-                        <th style="width:70px;">状态</th>
-                        <th style="width:150px;">创建时间</th>
-                        <th style="width:140px;">操作</th>
+                        <th class="col-status">状态</th>
+                        <th class="col-time">创建时间</th>
+                        <th class="col-actions">操作</th>
                     </tr>
                 </thead>
                 <tbody id="dataBody">
@@ -322,11 +326,11 @@ layui.use(['form','layer','element','jquery'], function() {
                             '<td title="' + (item.description || '') + '">' + (item.description || '-') + '</td>' +
                             '<td>' + (item.status == 1 ? '<span class="badge-active">启用</span>' : '<span class="badge-inactive">禁用</span>') + '</td>' +
                             '<td>' + (item.created_at || '') + '</td>' +
-                            '<td>' +
-                                '<button class="layui-btn layui-btn-xs layui-btn-normal" onclick="editSkill(' + item.id + ')"><i class="layui-icon layui-icon-edit"></i></button> ' +
+                            '<td><div class="action-btns">' +
+                                '<button class="layui-btn layui-btn-xs layui-btn-normal" onclick="editSkill(' + item.id + ')"><i class="layui-icon layui-icon-edit"></i> 编辑</button> ' +
                                 '<button class="layui-btn layui-btn-xs layui-btn-warm" onclick="toggleSkill(' + item.id + ')">' + (item.status == 1 ? '禁用' : '启用') + '</button> ' +
-                                (item.type !== 'builtin' ? '<button class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSkill(' + item.id + ')"><i class="layui-icon layui-icon-delete"></i></button>' : '') +
-                            '</td>' +
+                                (item.type !== 'builtin' ? '<button class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSkill(' + item.id + ')"><i class="layui-icon layui-icon-delete"></i> 删除</button>' : '') +
+                            '</div></td>' +
                         '</tr>';
                     });
                 }
@@ -361,7 +365,7 @@ layui.use(['form','layer','element','jquery'], function() {
         if (page) { currentPage = page; loadList(page, $('input[name="keyword"]').val(), $('select[name="statusFilter"]').val()); }
     });
 
-    // 收集实现配置
+    // 收集实现配置到impl_config
     function collectImplConfig() {
         var t = $('select[name="impl_type"]').val();
         var config = {};
@@ -378,7 +382,44 @@ layui.use(['form','layer','element','jquery'], function() {
             config.func_name = $('input[name="func_name"]').val() || '';
         }
         $('#implConfigInput').val(JSON.stringify(config));
-        return config;
+    }
+
+    // 获取表单数据并提交
+    function submitForm(url) {
+        collectImplConfig();
+        // 手动收集表单字段（避免 serialize() 遗漏）
+        var fd = {
+            name: $('input[name="name"]').val() || '',
+            code: $('input[name="code"]').val() || '',
+            type: $('select[name="type"]').val() || 'custom',
+            impl_type: $('select[name="impl_type"]').val() || 'api_call',
+            status: $('select[name="status"]').val() || '1',
+            description: $('textarea[name="description"]').val() || '',
+            impl_config: $('#implConfigInput').val() || '{}',
+            input_schema: $('#inputSchemaInput').val() || '{}',
+            output_schema: $('#outputSchemaInput').val() || '{}'
+        };
+        var id = $('#skillId').val();
+        if (id) { fd.id = id; }
+        $.ajax({
+            url: url, type: 'POST', dataType: 'json',
+            data: fd,
+            headers: {'X-XSRFToken': getXsrfToken()},
+            success: function(res) {
+                if (res.success) {
+                    layer.closeAll();
+                    layer.msg(isEdit ? '更新成功' : '创建成功', {icon:1});
+                    var kw = $('input[name="keyword"]').val();
+                    var st = $('select[name="statusFilter"]').val();
+                    loadList(currentPage, kw, st);
+                } else {
+                    layer.msg(res.error || '操作失败', {icon:2});
+                }
+            },
+            error: function(xhr) {
+                layer.msg('请求失败: ' + (xhr.statusText || xhr.status), {icon:2});
+            }
+        });
     }
 
     // 新增
@@ -401,24 +442,8 @@ layui.use(['form','layer','element','jquery'], function() {
 
     // 保存
     form.on('submit(saveBtn)', function(data) {
-        collectImplConfig();
         var url = isEdit ? '/api/skills/update' : '/api/skills/create';
-        $.ajax({
-            url: url, type: 'POST', dataType: 'json',
-            data: $('#skillForm').serialize(),
-            headers: {'X-XSRFToken': getXsrfToken()},
-            success: function(res) {
-                if (res.success) {
-                    layer.closeAll();
-                    layer.msg(isEdit ? '更新成功' : '创建成功', {icon:1});
-                    var kw = $('input[name="keyword"]').val();
-                    var st = $('select[name="statusFilter"]').val();
-                    loadList(currentPage, kw, st);
-                } else {
-                    layer.msg(res.error || '操作失败', {icon:2});
-                }
-            }
-        });
+        submitForm(url);
         return false;
     });
 

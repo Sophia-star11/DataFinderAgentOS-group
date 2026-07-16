@@ -10,6 +10,8 @@ from app.models.ai_model import AiModelRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.conversation import ConversationRepository
 from app.controllers.data_query import DataQueryTool
+from app.models.skill import SkillRepository
+from app.services.skill_executor import SkillExecutor
 from app.utils.logger import get_logger
 
 logger = get_logger('user_chat')
@@ -545,6 +547,36 @@ class UserChatApiHandler(BaseHandler):
                                             })
                                 except Exception as e:
                                     logger.error(f"Crawl4AI爬取失败: {e}")
+
+                    # 执行关联技能：加载数字员工关联的技能并执行，将上下文注入到系统提示词
+                    try:
+                        skill_ids_str = employee.get("skills", "")
+                        if skill_ids_str:
+                            import json as _json
+                            skill_ids = _json.loads(skill_ids_str) if isinstance(skill_ids_str, str) else skill_ids_str
+                            if skill_ids and isinstance(skill_ids, list):
+                                skills = SkillRepository.get_by_ids([int(s) for s in skill_ids if str(s).isdigit()])
+                                if skills:
+                                    last_user_msg = ""
+                                    for msg in reversed(msg_list):
+                                        if msg.get("role") == "user":
+                                            last_user_msg = msg.get("content", "")
+                                            break
+                                    skill_context_parts = []
+                                    for sk in skills:
+                                        result = SkillExecutor.execute(sk, {"keyword": last_user_msg, "user_input": last_user_msg, "city": last_user_msg})
+                                        if result["success"]:
+                                            data_str = _json.dumps(result["data"], ensure_ascii=False, indent=2) if not isinstance(result.get("data"), str) else result["data"]
+                                            skill_context_parts.append(f"[技能执行: {sk['name']}]\n{data_str}")
+                                    if skill_context_parts:
+                                        skill_context = "\n\n".join(skill_context_parts)
+                                        context_msg = f"以下是通过关联技能获取的辅助信息，请结合这些信息回答用户问题：\n\n{skill_context}"
+                                        if final_system_prompt:
+                                            final_system_prompt = f"{final_system_prompt}\n\n---\n{context_msg}"
+                                        else:
+                                            final_system_prompt = context_msg
+                    except Exception as e:
+                        logger.error(f"技能执行失败: {e}")
                 elif employee["type"] == "api":
                     # API型：直接调用API端点，不经过模型
                     await self._call_api_employee(employee, msg_list, start_time=start_time)
