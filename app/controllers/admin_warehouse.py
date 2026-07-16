@@ -2,21 +2,21 @@ import json
 import datetime
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.data_warehouse import DataWarehouseRepository
 from app.models.deep_collect import DeepCollectRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.ai_model import AiModelRepository
 
 
-class WarehouseManagementHandler(BaseHandler):
+class WarehouseManagementHandler(AdminBaseHandler):
     """数据仓库页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/warehouse_management.html", title="数据仓库", username=self.current_user)
 
 
-class WarehouseListApiHandler(BaseHandler):
+class WarehouseListApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         page = int(self.get_argument("page", 1))
@@ -35,7 +35,7 @@ class WarehouseListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class WarehouseGetApiHandler(BaseHandler):
+class WarehouseGetApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         item_id = self.get_argument("id", "")
@@ -49,7 +49,7 @@ class WarehouseGetApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "数据不存在"}))
 
 
-class WarehouseDeleteApiHandler(BaseHandler):
+class WarehouseDeleteApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         item_id = self.get_argument("id", "")
@@ -59,7 +59,7 @@ class WarehouseDeleteApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
 
-class WarehouseBatchDeleteApiHandler(BaseHandler):
+class WarehouseBatchDeleteApiHandler(AdminBaseHandler):
     """批量删除"""
     @tornado.web.authenticated
     def post(self):
@@ -434,7 +434,7 @@ async def _call_api_employee(employee, warehouse_item, crawled_content=""):
 
 # ========== API Handlers ==========
 
-class WarehouseBatchDeepCollectApiHandler(BaseHandler):
+class WarehouseBatchDeepCollectApiHandler(AdminBaseHandler):
     """批量启动深度采集"""
     @tornado.web.authenticated
     async def post(self):
@@ -465,7 +465,7 @@ class WarehouseBatchDeepCollectApiHandler(BaseHandler):
         }))
 
 
-class DeepCollectTaskApiHandler(BaseHandler):
+class DeepCollectTaskApiHandler(AdminBaseHandler):
     """获取深度采集任务状态"""
     @tornado.web.authenticated
     def get(self):
@@ -492,7 +492,7 @@ class DeepCollectTaskApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "任务不存在"}))
 
 
-class DeepCollectResultApiHandler(BaseHandler):
+class DeepCollectResultApiHandler(AdminBaseHandler):
     """获取深度采集结果详情（从deep_collect_data表读取）"""
     @tornado.web.authenticated
     def get(self):
@@ -562,7 +562,7 @@ class DeepCollectResultApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "深度采集数据不存在"}))
 
 
-class DeepCollectStartSingleApiHandler(BaseHandler):
+class DeepCollectStartSingleApiHandler(AdminBaseHandler):
     """单条数据启动深度采集"""
     @tornado.web.authenticated
     async def post(self):

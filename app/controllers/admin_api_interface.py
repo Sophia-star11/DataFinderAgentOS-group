@@ -3,18 +3,18 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.api_interface import ApiInterfaceRepository
 
 
-class ApiInterfaceManagementHandler(BaseHandler):
+class ApiInterfaceManagementHandler(AdminBaseHandler):
     """接口管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/api_interface.html", title="接口管理", username=self.current_user)
 
 
-class ApiInterfaceListApiHandler(BaseHandler):
+class ApiInterfaceListApiHandler(AdminBaseHandler):
     """接口列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -28,7 +28,7 @@ class ApiInterfaceListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class ApiInterfaceGetApiHandler(BaseHandler):
+class ApiInterfaceGetApiHandler(AdminBaseHandler):
     """获取接口详情API"""
     @tornado.web.authenticated
     def get(self):
@@ -45,7 +45,7 @@ class ApiInterfaceGetApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "接口不存在"}))
 
 
-class ApiInterfaceEnabledListApiHandler(BaseHandler):
+class ApiInterfaceEnabledListApiHandler(AdminBaseHandler):
     """获取启用接口列表（供数字员工选择用）"""
     @tornado.web.authenticated
     def get(self):
@@ -53,7 +53,7 @@ class ApiInterfaceEnabledListApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": items}))
 
 
-class ApiInterfaceCreateApiHandler(BaseHandler):
+class ApiInterfaceCreateApiHandler(AdminBaseHandler):
     """创建接口API"""
     @tornado.web.authenticated
     def post(self):
@@ -89,7 +89,7 @@ class ApiInterfaceCreateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": err or "创建失败"}))
 
 
-class ApiInterfaceUpdateApiHandler(BaseHandler):
+class ApiInterfaceUpdateApiHandler(AdminBaseHandler):
     """更新接口API"""
     @tornado.web.authenticated
     def post(self):
@@ -128,7 +128,7 @@ class ApiInterfaceUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": err or "更新失败"}))
 
 
-class ApiInterfaceDeleteApiHandler(BaseHandler):
+class ApiInterfaceDeleteApiHandler(AdminBaseHandler):
     """删除接口API"""
     @tornado.web.authenticated
     def post(self):
@@ -144,7 +144,7 @@ class ApiInterfaceDeleteApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
 
-class ApiInterfaceToggleApiHandler(BaseHandler):
+class ApiInterfaceToggleApiHandler(AdminBaseHandler):
     """切换接口状态API"""
     @tornado.web.authenticated
     def post(self):

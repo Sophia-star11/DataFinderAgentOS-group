@@ -2,25 +2,25 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.conversation import ConversationRepository
 
 
-class ConversationManagementHandler(BaseHandler):
+class ConversationManagementHandler(AdminBaseHandler):
     """会话管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/conversation_management.html", title="会话管理", username=self.current_user)
 
 
-class MessageManagementHandler(BaseHandler):
+class MessageManagementHandler(AdminBaseHandler):
     """对话管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/message_management.html", title="对话管理", username=self.current_user)
 
 
-class ConversationListApiHandler(BaseHandler):
+class ConversationListApiHandler(AdminBaseHandler):
     """会话列表API（跨用户）"""
     @tornado.web.authenticated
     def get(self):
@@ -33,7 +33,7 @@ class ConversationListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class ConversationMessagesApiHandler(BaseHandler):
+class ConversationMessagesApiHandler(AdminBaseHandler):
     """获取指定会话的完整消息列表"""
     @tornado.web.authenticated
     def get(self):
@@ -50,7 +50,7 @@ class ConversationMessagesApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "会话不存在"}, ensure_ascii=False))
 
 
-class ConversationDeleteApiHandler(BaseHandler):
+class ConversationDeleteApiHandler(AdminBaseHandler):
     """删除会话"""
     @tornado.web.authenticated
     def post(self):
@@ -63,7 +63,7 @@ class ConversationDeleteApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "message": "会话已删除"}, ensure_ascii=False))
 
 
-class ConversationDeleteMessageApiHandler(BaseHandler):
+class ConversationDeleteMessageApiHandler(AdminBaseHandler):
     """删除单条消息"""
     @tornado.web.authenticated
     def post(self):
@@ -81,7 +81,7 @@ class ConversationDeleteMessageApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "消息不存在"}, ensure_ascii=False))
 
 
-class ConversationMessagesAllApiHandler(BaseHandler):
+class ConversationMessagesAllApiHandler(AdminBaseHandler):
     """获取所有消息（展平，跨会话），用于对话管理页面"""
     @tornado.web.authenticated
     def get(self):

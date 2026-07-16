@@ -2,7 +2,7 @@ import json
 import tornado.web
 import requests
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import BaseHandler, AdminBaseHandler
 from app.models.db import get_connection
 from app.models.ai_model import AiModelRepository
 from datetime import datetime, timedelta
@@ -162,21 +162,21 @@ class GestureHandler(BaseHandler):
     def get(self):
         self.render("gesture.html")
 
-class AdminIndexHandler(BaseHandler):
+class AdminIndexHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         stats = self.get_base_stats()
         self.render("admin/index.html", title="后台管理", username=self.current_user, stats=stats)
 
 
-class DataScreenHandler(BaseHandler):
+class DataScreenHandler(AdminBaseHandler):
     """数智大屏页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/data_screen.html", title="数智大屏", username=self.current_user)
 
 
-class DataScreenStatsApiHandler(BaseHandler):
+class DataScreenStatsApiHandler(AdminBaseHandler):
     """数智大屏概览统计数据API"""
     @tornado.web.authenticated
     def get(self):
@@ -201,7 +201,7 @@ class DataScreenStatsApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": data}))
 
 
-class DataScreenWordcloudApiHandler(BaseHandler):
+class DataScreenWordcloudApiHandler(AdminBaseHandler):
     """数智大屏词云数据API"""
     @tornado.web.authenticated
     def get(self):
@@ -219,7 +219,7 @@ class DataScreenWordcloudApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": words}))
 
 
-class DataScreenTrendsApiHandler(BaseHandler):
+class DataScreenTrendsApiHandler(AdminBaseHandler):
     """数智大屏趋势数据API"""
     @tornado.web.authenticated
     def get(self):
@@ -238,7 +238,7 @@ class DataScreenTrendsApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": trend}))
 
 
-class DataScreenSourceApiHandler(BaseHandler):
+class DataScreenSourceApiHandler(AdminBaseHandler):
     """数智大屏来源分布API"""
     @tornado.web.authenticated
     def get(self):
@@ -254,7 +254,7 @@ class DataScreenSourceApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": data}))
 
 
-class DataScreenSankeyApiHandler(BaseHandler):
+class DataScreenSankeyApiHandler(AdminBaseHandler):
     """数智大屏桑基图数据API — 数据流水线"""
     @tornado.web.authenticated
     def get(self):
@@ -291,14 +291,14 @@ class DataScreenSankeyApiHandler(BaseHandler):
             self.write(json.dumps({"success": True, "data": {"nodes": [], "links": []}}))
 
 
-class OpinionScreenHandler(BaseHandler):
+class OpinionScreenHandler(AdminBaseHandler):
     """舆情大屏页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/opinion_screen.html", title="舆情大屏", username=self.current_user)
 
 
-class OpinionWarningsApiHandler(BaseHandler):
+class OpinionWarningsApiHandler(AdminBaseHandler):
     """舆情警告列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -333,7 +333,7 @@ class OpinionWarningsApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionStatsApiHandler(BaseHandler):
+class OpinionStatsApiHandler(AdminBaseHandler):
     """舆情统计数据API"""
     @tornado.web.authenticated
     def get(self):
@@ -372,7 +372,7 @@ class OpinionStatsApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionAIAnalyzeApiHandler(BaseHandler):
+class OpinionAIAnalyzeApiHandler(AdminBaseHandler):
     """AI分析告警（调用大模型做语义判定）"""
     @tornado.web.authenticated
     def post(self):
@@ -422,38 +422,44 @@ class OpinionAIAnalyzeApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionAcknowledgeApiHandler(BaseHandler):
-    """确认/已读告警"""
+class OpinionAcknowledgeApiHandler(AdminBaseHandler):
+    """确认/已读告警 / 更改预警级别"""
     @tornado.web.authenticated
     def post(self):
         try:
             body = json.loads(self.request.body)
             warning_id = body.get("id")
-            status = body.get("status", "read")
-            feedback = body.get("user_feedback", "")
-
             if not warning_id:
                 self.write(json.dumps({"success": False, "message": "缺少id参数"}))
                 return
 
+            fields = {}
+            if "status" in body:
+                fields["status"] = body["status"]
+            if "severity" in body:
+                fields["severity"] = body["severity"]
+            if body.get("user_feedback"):
+                fields["user_feedback"] = body["user_feedback"]
+
+            if not fields:
+                self.write(json.dumps({"success": False, "message": "没有要更新的字段"}))
+                return
+
+            set_clause = ", ".join(f"{k}=?" for k in fields)
+            values = list(fields.values()) + [warning_id]
+
             with get_connection() as conn:
-                if feedback:
-                    conn.execute(
-                        "UPDATE public_opinion_warnings SET status=?, user_feedback=? WHERE id=?",
-                        (status, feedback, warning_id)
-                    )
-                else:
-                    conn.execute(
-                        "UPDATE public_opinion_warnings SET status=? WHERE id=?",
-                        (status, warning_id)
-                    )
+                conn.execute(
+                    f"UPDATE public_opinion_warnings SET {set_clause} WHERE id=?",
+                    values
+                )
 
             self.write(json.dumps({"success": True}))
         except Exception as e:
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionFeedbackApiHandler(BaseHandler):
+class OpinionFeedbackApiHandler(AdminBaseHandler):
     """用户反馈（模拟回传）"""
     @tornado.web.authenticated
     def post(self):
@@ -477,7 +483,7 @@ class OpinionFeedbackApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionScanApiHandler(BaseHandler):
+class OpinionScanApiHandler(AdminBaseHandler):
     """扫描采集数据+用户对话中的攻击性敏感词（带数量限制与防重入保护）"""
     _last_scan_time = 0
 
@@ -574,7 +580,7 @@ class OpinionScanApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class OpinionBatchReviewApiHandler(BaseHandler):
+class OpinionBatchReviewApiHandler(AdminBaseHandler):
     """批量 AI 审核所有待审预警"""
     @tornado.web.authenticated
     async def post(self):
@@ -602,7 +608,7 @@ class OpinionBatchReviewApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class SensitiveWordsApiHandler(BaseHandler):
+class SensitiveWordsApiHandler(AdminBaseHandler):
     """敏感词列表/详情（支持分页）"""
     @tornado.web.authenticated
     def get(self):
@@ -632,7 +638,7 @@ class SensitiveWordsApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class SensitiveWordsCreateApiHandler(BaseHandler):
+class SensitiveWordsCreateApiHandler(AdminBaseHandler):
     """新增敏感词"""
     @tornado.web.authenticated
     def post(self):
@@ -655,7 +661,7 @@ class SensitiveWordsCreateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class SensitiveWordsUpdateApiHandler(BaseHandler):
+class SensitiveWordsUpdateApiHandler(AdminBaseHandler):
     """更新敏感词"""
     @tornado.web.authenticated
     def post(self):
@@ -679,7 +685,7 @@ class SensitiveWordsUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": str(e)}))
 
 
-class SensitiveWordsDeleteApiHandler(BaseHandler):
+class SensitiveWordsDeleteApiHandler(AdminBaseHandler):
     """删除敏感词"""
     @tornado.web.authenticated
     def post(self):

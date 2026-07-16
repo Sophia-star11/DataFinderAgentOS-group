@@ -6,7 +6,7 @@ import ssl
 
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.watch_source import WatchSourceRepository
 from app.models.watch_data import WatchDataRepository
 from app.models.data_warehouse import DataWarehouseRepository
@@ -16,14 +16,14 @@ from app.parsers import ParserRegistry
 logger = get_logger('admin_watch')
 
 
-class WatchManagementHandler(BaseHandler):
+class WatchManagementHandler(AdminBaseHandler):
     """瞭望管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/watch_management.html", title="瞭望采集", username=self.current_user)
 
 
-class WatchCollectApiHandler(BaseHandler):
+class WatchCollectApiHandler(AdminBaseHandler):
     """瞭望采集API - 根据选择的瞭源和关键词发起采集"""
     @tornado.web.authenticated
     def post(self):
@@ -141,7 +141,7 @@ class WatchCollectApiHandler(BaseHandler):
 
 
 
-class WatchCollectedDataApiHandler(BaseHandler):
+class WatchCollectedDataApiHandler(AdminBaseHandler):
     """瞭望采集数据列表API（橱窗模式）"""
     @tornado.web.authenticated
     def get(self):
@@ -161,7 +161,7 @@ class WatchCollectedDataApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class WatchSaveToWarehouseApiHandler(BaseHandler):
+class WatchSaveToWarehouseApiHandler(AdminBaseHandler):
     """将采集到的数据保存到数据仓库（支持选择/全选）"""
     @tornado.web.authenticated
     def post(self):

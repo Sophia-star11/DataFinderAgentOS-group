@@ -1,16 +1,16 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.function import FunctionRepository
 
-class FunctionManagementHandler(BaseHandler):
+class FunctionManagementHandler(AdminBaseHandler):
     """功能管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/function_management.html", title="功能管理", username=self.current_user)
 
-class FunctionListApiHandler(BaseHandler):
+class FunctionListApiHandler(AdminBaseHandler):
     """功能列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -20,7 +20,7 @@ class FunctionListApiHandler(BaseHandler):
             "total": len(functions)
         }))
 
-class FunctionGetApiHandler(BaseHandler):
+class FunctionGetApiHandler(AdminBaseHandler):
     """获取功能详情API"""
     @tornado.web.authenticated
     def get(self):
@@ -37,7 +37,7 @@ class FunctionGetApiHandler(BaseHandler):
             self.set_status(404)
             self.write(json.dumps({"success": False, "message": "功能不存在"}))
 
-class FunctionCreateApiHandler(BaseHandler):
+class FunctionCreateApiHandler(AdminBaseHandler):
     """创建功能API"""
     @tornado.web.authenticated
     def post(self):
@@ -60,7 +60,7 @@ class FunctionCreateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "功能编码已存在"}))
 
-class FunctionUpdateApiHandler(BaseHandler):
+class FunctionUpdateApiHandler(AdminBaseHandler):
     """更新功能API"""
     @tornado.web.authenticated
     def post(self):
@@ -89,7 +89,7 @@ class FunctionUpdateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "更新失败"}))
 
-class FunctionDeleteApiHandler(BaseHandler):
+class FunctionDeleteApiHandler(AdminBaseHandler):
     """删除功能API"""
     @tornado.web.authenticated
     def post(self):
@@ -101,7 +101,7 @@ class FunctionDeleteApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
-class FunctionToggleApiHandler(BaseHandler):
+class FunctionToggleApiHandler(AdminBaseHandler):
     """启用/禁用功能API"""
     @tornado.web.authenticated
     def post(self):

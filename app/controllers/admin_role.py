@@ -1,19 +1,19 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.role import RoleRepository
 from app.models.function import FunctionRepository
 from app.models.role_function import RoleFunctionRepository
 from app.models.menu import MenuRepository
 
-class RoleManagementHandler(BaseHandler):
+class RoleManagementHandler(AdminBaseHandler):
     """角色管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/role_management.html", title="角色管理", username=self.current_user)
 
-class RoleListApiHandler(BaseHandler):
+class RoleListApiHandler(AdminBaseHandler):
     """角色列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -28,7 +28,7 @@ class RoleListApiHandler(BaseHandler):
             "page_size": page_size
         }))
 
-class RoleCreateApiHandler(BaseHandler):
+class RoleCreateApiHandler(AdminBaseHandler):
     """创建角色API"""
     @tornado.web.authenticated
     def post(self):
@@ -47,7 +47,7 @@ class RoleCreateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "角色编码已存在"}))
 
-class RoleUpdateApiHandler(BaseHandler):
+class RoleUpdateApiHandler(AdminBaseHandler):
     """更新角色API"""
     @tornado.web.authenticated
     def post(self):
@@ -81,7 +81,7 @@ class RoleUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "更新失败"}))
 
 
-class RoleGetApiHandler(BaseHandler):
+class RoleGetApiHandler(AdminBaseHandler):
     """获取单个角色API（用于编辑弹窗回填）"""
     @tornado.web.authenticated
     def get(self):
@@ -99,7 +99,7 @@ class RoleGetApiHandler(BaseHandler):
         
         self.write(json.dumps({"success": True, "data": dict(role)}))
 
-class RoleDeleteApiHandler(BaseHandler):
+class RoleDeleteApiHandler(AdminBaseHandler):
     """删除角色API"""
     @tornado.web.authenticated
     def post(self):
@@ -118,7 +118,7 @@ class RoleDeleteApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
-class RoleFunctionsApiHandler(BaseHandler):
+class RoleFunctionsApiHandler(AdminBaseHandler):
     """获取角色已分配的功能ID列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -135,7 +135,7 @@ class RoleFunctionsApiHandler(BaseHandler):
         }))
 
 
-class RoleFunctionsSaveApiHandler(BaseHandler):
+class RoleFunctionsSaveApiHandler(AdminBaseHandler):
     """保存角色功能分配API（自动同步菜单）"""
     @tornado.web.authenticated
     def post(self):

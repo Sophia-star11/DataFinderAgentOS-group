@@ -1,11 +1,11 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.user import UserRepository
 
 
-class ProfileApiHandler(BaseHandler):
+class ProfileApiHandler(AdminBaseHandler):
     """获取当前登录用户个人信息"""
     @tornado.web.authenticated
     def get(self):
@@ -21,7 +21,7 @@ class ProfileApiHandler(BaseHandler):
         self.write({"success": True, "data": user})
 
 
-class ChangePasswordApiHandler(BaseHandler):
+class ChangePasswordApiHandler(AdminBaseHandler):
     """修改当前登录用户密码"""
     @tornado.web.authenticated
     def post(self):

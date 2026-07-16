@@ -326,6 +326,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="detail-row">
+                        <div class="detail-label">预警级别</div>
+                        <div class="detail-value">
+                            <span id="detail-severity-badge"></span>
+                            <select id="detail-severity-select" style="display:none;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:2px 4px;font-size:12px;outline:none;">
+                                <option value="high">高危</option>
+                                <option value="medium">中危</option>
+                                <option value="low">低危</option>
+                            </select>
+                            <button class="tool-btn" id="btn-change-severity" onclick="toggleEditSeverity()" style="margin-left:4px;"><i class="layui-icon">&#xe642;</i> 更改</button>
+                            <button class="tool-btn" id="btn-save-severity" onclick="changeSeverity()" style="display:none;margin-left:4px;color:#22c55e;"><i class="layui-icon">&#xe618;</i> 保存</button>
+                            <button class="tool-btn" id="btn-cancel-severity" onclick="cancelEditSeverity()" style="display:none;margin-left:4px;">取消</button>
+                        </div>
+                    </div>
                     <div class="detail-actions">
                         <button class="layui-btn layui-btn-sm layui-btn-primary" id="btn-ai-analyze" onclick="aiAnalyze()"><i class="layui-icon">&#xe667;</i> AI分析</button>
                         <button class="layui-btn layui-btn-sm layui-btn-normal" id="btn-mark-read" onclick="markRead()"><i class="layui-icon">&#xe642;</i> 标为已读</button>
@@ -474,6 +488,12 @@ function selectWarn(id) {
     } else {
         scoreEl.style.display = 'none';
     }
+    // 预警级别
+    var sevBadge = document.getElementById('detail-severity-badge');
+    var sevSelect = document.getElementById('detail-severity-select');
+    if (sevBadge) sevBadge.innerHTML = severityBadge(item.severity);
+    if (sevSelect) sevSelect.value = item.severity;
+    resetSeverityEdit();
     var isRead = item.status === 'read' || item.status === '已读' || item.status === 'acknowledged' || item.status === '已确认';
     var isAcked = item.status === 'acknowledged' || item.status === '已确认';
     var hasAnalysis = !!(item.risk_analysis);
@@ -608,6 +628,52 @@ function ackWithFeedback() {
         if (res.success) { document.getElementById('feedback-input').value = ''; loadAll(); }
         else alert(res.message || '操作失败');
     }).catch(function(){alert('请求失败');});
+}
+
+function resetSeverityEdit() {
+    var badge = document.getElementById('detail-severity-badge');
+    var sel = document.getElementById('detail-severity-select');
+    var btnChange = document.getElementById('btn-change-severity');
+    var btnSave = document.getElementById('btn-save-severity');
+    var btnCancel = document.getElementById('btn-cancel-severity');
+    if (!badge) return;
+    badge.style.display = '';
+    sel.style.display = 'none';
+    btnChange.style.display = '';
+    btnSave.style.display = 'none';
+    btnCancel.style.display = 'none';
+}
+function toggleEditSeverity() {
+    var badge = document.getElementById('detail-severity-badge');
+    var sel = document.getElementById('detail-severity-select');
+    var btnChange = document.getElementById('btn-change-severity');
+    var btnSave = document.getElementById('btn-save-severity');
+    var btnCancel = document.getElementById('btn-cancel-severity');
+    if (badge.style.display === 'none') {
+        resetSeverityEdit();
+    } else {
+        badge.style.display = 'none';
+        sel.style.display = '';
+        btnChange.style.display = 'none';
+        btnSave.style.display = '';
+        btnCancel.style.display = '';
+    }
+}
+function changeSeverity() {
+    if (!selectedWarnId) return;
+    var severity = document.getElementById('detail-severity-select').value;
+    var btn = document.getElementById('btn-save-severity');
+    btn.disabled = true; btn.innerHTML = '保存中...';
+    postJSON('/api/opinion/acknowledge', {id:selectedWarnId, severity:severity})
+    .then(function(r){return r.json()}).then(function(res){
+        if (res.success) loadAll();
+        else alert(res.message || '更改失败');
+    }).catch(function(){alert('请求失败');}).finally(function(){
+        btn.disabled = false; btn.innerHTML = '<i class="layui-icon">&#xe618;</i> 保存';
+    });
+}
+function cancelEditSeverity() {
+    resetSeverityEdit();
 }
 
 function getXsrf() {

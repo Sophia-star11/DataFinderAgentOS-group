@@ -1,16 +1,16 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.user import UserRepository
 
-class UserManagementHandler(BaseHandler):
+class UserManagementHandler(AdminBaseHandler):
     """用户管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/user_management.html", title="用户管理", username=self.current_user)
 
-class UserListApiHandler(BaseHandler):
+class UserListApiHandler(AdminBaseHandler):
     """用户列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -30,7 +30,7 @@ class UserListApiHandler(BaseHandler):
         result = UserRepository.get_all_users(page, page_size, search, role_id, status)
         self.write(json.dumps(result, ensure_ascii=False))
 
-class UserGetApiHandler(BaseHandler):
+class UserGetApiHandler(AdminBaseHandler):
     """获取用户详情API"""
     @tornado.web.authenticated
     def get(self):
@@ -47,7 +47,7 @@ class UserGetApiHandler(BaseHandler):
             self.set_status(404)
             self.write(json.dumps({"success": False, "message": "用户不存在"}))
 
-class UserCreateApiHandler(BaseHandler):
+class UserCreateApiHandler(AdminBaseHandler):
     """创建用户API"""
     @tornado.web.authenticated
     def post(self):
@@ -66,7 +66,7 @@ class UserCreateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "用户名已存在"}))
 
-class UserUpdateApiHandler(BaseHandler):
+class UserUpdateApiHandler(AdminBaseHandler):
     """更新用户API"""
     @tornado.web.authenticated
     def post(self):
@@ -122,7 +122,7 @@ class UserUpdateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "更新失败"}))
 
-class UserDeleteApiHandler(BaseHandler):
+class UserDeleteApiHandler(AdminBaseHandler):
     """删除用户API"""
     @tornado.web.authenticated
     def post(self):

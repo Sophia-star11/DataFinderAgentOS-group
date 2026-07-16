@@ -1,18 +1,18 @@
 """技能管理 — 管理侧控制器"""
 import json
 import tornado.web
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.skill import SkillRepository
 
 
-class SkillManagementHandler(BaseHandler):
+class SkillManagementHandler(AdminBaseHandler):
     """技能管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/skill_management.html", title="技能管理", username=self.current_user)
 
 
-class SkillListApiHandler(BaseHandler):
+class SkillListApiHandler(AdminBaseHandler):
     """技能列表API（分页+搜索）"""
     @tornado.web.authenticated
     def get(self):
@@ -25,7 +25,7 @@ class SkillListApiHandler(BaseHandler):
         self.write_json({"success": True, "data": rows, "total": total, "page": page, "size": size})
 
 
-class SkillGetApiHandler(BaseHandler):
+class SkillGetApiHandler(AdminBaseHandler):
     """获取单个技能详情"""
     @tornado.web.authenticated
     def get(self):
@@ -40,7 +40,7 @@ class SkillGetApiHandler(BaseHandler):
         self.write_json({"success": True, "data": skill})
 
 
-class SkillEnabledListApiHandler(BaseHandler):
+class SkillEnabledListApiHandler(AdminBaseHandler):
     """获取启用状态的技能列表（供数字员工关联选择）"""
     @tornado.web.authenticated
     def get(self):
@@ -48,7 +48,7 @@ class SkillEnabledListApiHandler(BaseHandler):
         self.write_json({"success": True, "data": skills})
 
 
-class SkillCreateApiHandler(BaseHandler):
+class SkillCreateApiHandler(AdminBaseHandler):
     """创建技能"""
     @tornado.web.authenticated
     def post(self):
@@ -102,7 +102,7 @@ class SkillUpdateApiHandler(SkillCreateApiHandler):
             self.write_json({"success": False, "error": str(e)})
 
 
-class SkillDeleteApiHandler(BaseHandler):
+class SkillDeleteApiHandler(AdminBaseHandler):
     """删除技能（仅自定义类型）"""
     @tornado.web.authenticated
     def post(self):
@@ -117,7 +117,7 @@ class SkillDeleteApiHandler(BaseHandler):
             self.write_json({"success": False, "error": str(e)})
 
 
-class SkillToggleApiHandler(BaseHandler):
+class SkillToggleApiHandler(AdminBaseHandler):
     """启用/禁用技能"""
     @tornado.web.authenticated
     def post(self):

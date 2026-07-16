@@ -1,18 +1,18 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.ai_model import AiModelRepository
 
 
-class ModelEngineHandler(BaseHandler):
+class ModelEngineHandler(AdminBaseHandler):
     """模型引擎页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/model_engine.html", title="模型引擎", username=self.current_user)
 
 
-class ModelListApiHandler(BaseHandler):
+class ModelListApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         page = int(self.get_argument("page", 1))
@@ -27,7 +27,7 @@ class ModelListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class ModelCategoriesApiHandler(BaseHandler):
+class ModelCategoriesApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         cats = AiModelRepository.get_categories()
@@ -39,7 +39,7 @@ class ModelCategoriesApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": sorted(cats)}))
 
 
-class ModelGetApiHandler(BaseHandler):
+class ModelGetApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         model_id = self.get_argument("model_id", "")
@@ -53,7 +53,7 @@ class ModelGetApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "模型不存在"}))
 
 
-class ModelCreateApiHandler(BaseHandler):
+class ModelCreateApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         name = self.get_argument("name", "")
@@ -79,7 +79,7 @@ class ModelCreateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "模型创建失败"}))
 
 
-class ModelUpdateApiHandler(BaseHandler):
+class ModelUpdateApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         model_id = self.get_argument("model_id", "")
@@ -102,7 +102,7 @@ class ModelUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "模型更新失败"}))
 
 
-class ModelDeleteApiHandler(BaseHandler):
+class ModelDeleteApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         model_id = self.get_argument("model_id", "")
@@ -112,7 +112,7 @@ class ModelDeleteApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "模型删除失败"}))
 
 
-class ModelSetDefaultApiHandler(BaseHandler):
+class ModelSetDefaultApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         model_id = self.get_argument("model_id", "")
@@ -122,7 +122,7 @@ class ModelSetDefaultApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "默认模型设置失败"}))
 
 
-class ModelGetDefaultApiHandler(BaseHandler):
+class ModelGetDefaultApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         model = AiModelRepository.get_default()
@@ -132,7 +132,7 @@ class ModelGetDefaultApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "未设置默认模型"}))
 
 
-class ModelChatApiHandler(BaseHandler):
+class ModelChatApiHandler(AdminBaseHandler):
     """SSE流式对话API - 代理请求到真实OpenAI API"""
     @tornado.web.authenticated
     async def post(self):

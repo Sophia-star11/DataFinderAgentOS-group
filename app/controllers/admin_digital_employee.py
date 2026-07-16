@@ -3,20 +3,20 @@ import os
 import tornado.web
 import urllib.parse
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.ai_model import AiModelRepository
 from app.models.skill import SkillRepository
 
 
-class DigitalEmployeeManagementHandler(BaseHandler):
+class DigitalEmployeeManagementHandler(AdminBaseHandler):
     """数字员工管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/digital_employee_management.html", title="数字员工", username=self.current_user)
 
 
-class DigitalEmployeeListApiHandler(BaseHandler):
+class DigitalEmployeeListApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         page = int(self.get_argument("page", 1))
@@ -27,7 +27,7 @@ class DigitalEmployeeListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class DigitalEmployeeGetApiHandler(BaseHandler):
+class DigitalEmployeeGetApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def get(self):
         item_id = self.get_argument("id", "")
@@ -41,7 +41,7 @@ class DigitalEmployeeGetApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "数据不存在"}))
 
 
-class DigitalEmployeeCreateApiHandler(BaseHandler):
+class DigitalEmployeeCreateApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         try:
@@ -76,7 +76,7 @@ class DigitalEmployeeCreateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "创建失败"}))
 
 
-class DigitalEmployeeUpdateApiHandler(BaseHandler):
+class DigitalEmployeeUpdateApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         try:
@@ -107,7 +107,7 @@ class DigitalEmployeeUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "更新失败"}))
 
 
-class DigitalEmployeeDeleteApiHandler(BaseHandler):
+class DigitalEmployeeDeleteApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     def post(self):
         item_id = self.get_argument("id", "")
@@ -130,7 +130,7 @@ class DigitalEmployeeDeleteApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
 
-class DigitalEmployeeUploadMdHandler(BaseHandler):
+class DigitalEmployeeUploadMdHandler(AdminBaseHandler):
     """上传 .md 文件并读取内容（XSRF豁免：multipart/form-data与XSRF不兼容）"""
     def check_xsrf_cookie(self):
         pass  # 已有 @authenticated 保护，文件上传绕过 XSRF
@@ -190,7 +190,7 @@ class DigitalEmployeeUploadMdHandler(BaseHandler):
             self.finish()
 
 
-class DigitalEmployeeListMdHandler(BaseHandler):
+class DigitalEmployeeListMdHandler(AdminBaseHandler):
     """列出数字员工已上传的 .md 文件"""
     @tornado.web.authenticated
     def get(self):
@@ -229,7 +229,7 @@ class DigitalEmployeeListMdHandler(BaseHandler):
             self.finish()
 
 
-class DigitalEmployeeModelsApiHandler(BaseHandler):
+class DigitalEmployeeModelsApiHandler(AdminBaseHandler):
     """获取可用模型列表（用于关联选择）"""
     @tornado.web.authenticated
     def get(self):
@@ -237,7 +237,7 @@ class DigitalEmployeeModelsApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": models}, ensure_ascii=False))
 
 
-class DigitalEmployeeSkillsApiHandler(BaseHandler):
+class DigitalEmployeeSkillsApiHandler(AdminBaseHandler):
     """获取可用技能列表（用于数字员工关联多选）"""
     @tornado.web.authenticated
     def get(self):
@@ -245,7 +245,7 @@ class DigitalEmployeeSkillsApiHandler(BaseHandler):
         self.write(json.dumps({"success": True, "data": skills}, ensure_ascii=False))
 
 
-class DigitalEmployeeTestApiHandler(BaseHandler):
+class DigitalEmployeeTestApiHandler(AdminBaseHandler):
     """数字员工测试API"""
     @tornado.web.authenticated
     async def post(self):

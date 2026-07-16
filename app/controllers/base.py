@@ -87,3 +87,18 @@ class BaseHandler(tornado.web.RequestHandler):
         if "user_info" not in kwargs:
             kwargs["user_info"] = self.get_user_info()
         super().render(template_name, **kwargs)
+
+
+class AdminBaseHandler(BaseHandler):
+    """管理员基础Handler：在 authenticated 基础上增加角色校验"""
+    def get_current_user(self):
+        username = super().get_current_user()
+        if not username:
+            return None
+        user = UserRepository.get_user_by_username(username)
+        if not user:
+            return None
+        user_dict = dict(user)
+        if user_dict.get("role_code") != "admin":
+            return None
+        return username

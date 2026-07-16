@@ -1,18 +1,18 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.watch_source import WatchSourceRepository
 
 
-class SourceManagementHandler(BaseHandler):
+class SourceManagementHandler(AdminBaseHandler):
     """瞭源管理页面"""
     @tornado.web.authenticated
     def get(self):
         self.render("admin/source_management.html", title="瞭源管理", username=self.current_user)
 
 
-class SourceListApiHandler(BaseHandler):
+class SourceListApiHandler(AdminBaseHandler):
     """瞭源列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -32,7 +32,7 @@ class SourceListApiHandler(BaseHandler):
         self.write(json.dumps(result, ensure_ascii=False))
 
 
-class SourceGetApiHandler(BaseHandler):
+class SourceGetApiHandler(AdminBaseHandler):
     """获取瞭源详情API"""
     @tornado.web.authenticated
     def get(self):
@@ -50,7 +50,7 @@ class SourceGetApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "瞭源不存在"}))
 
 
-class SourceCreateApiHandler(BaseHandler):
+class SourceCreateApiHandler(AdminBaseHandler):
     """创建瞭源API"""
     @tornado.web.authenticated
     def post(self):
@@ -90,7 +90,7 @@ class SourceCreateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "瞭源创建失败"}))
 
 
-class SourceUpdateApiHandler(BaseHandler):
+class SourceUpdateApiHandler(AdminBaseHandler):
     """更新瞭源API"""
     @tornado.web.authenticated
     def post(self):
@@ -139,7 +139,7 @@ class SourceUpdateApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "瞭源更新失败"}))
 
 
-class SourceDeleteApiHandler(BaseHandler):
+class SourceDeleteApiHandler(AdminBaseHandler):
     """删除瞭源API"""
     @tornado.web.authenticated
     def post(self):
@@ -151,7 +151,7 @@ class SourceDeleteApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "瞭源删除失败"}))
 
 
-class SourceActiveListApiHandler(BaseHandler):
+class SourceActiveListApiHandler(AdminBaseHandler):
     """获取所有启用的瞭源列表（供瞭望管理使用）"""
     @tornado.web.authenticated
     def get(self):

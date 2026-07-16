@@ -1,19 +1,19 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.models.menu import MenuRepository
 from app.models.role import RoleRepository
 from app.models.function import FunctionRepository
 
-class MenuManagementHandler(BaseHandler):
+class MenuManagementHandler(AdminBaseHandler):
     """菜单管理页面"""
     @tornado.web.authenticated
     def get(self):
         roles = RoleRepository.get_all_roles()
         self.render("admin/menu_management.html", title="菜单管理", username=self.current_user, roles=[dict(r) for r in roles])
 
-class MenuListApiHandler(BaseHandler):
+class MenuListApiHandler(AdminBaseHandler):
     """菜单列表API"""
     @tornado.web.authenticated
     def get(self):
@@ -29,7 +29,7 @@ class MenuListApiHandler(BaseHandler):
             "total": len(menus)
         }))
 
-class MenuCreateApiHandler(BaseHandler):
+class MenuCreateApiHandler(AdminBaseHandler):
     """创建菜单API"""
     @tornado.web.authenticated
     def post(self):
@@ -43,7 +43,7 @@ class MenuCreateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "菜单创建失败"}))
 
-class MenuUpdateApiHandler(BaseHandler):
+class MenuUpdateApiHandler(AdminBaseHandler):
     """更新菜单API"""
     @tornado.web.authenticated
     def post(self):
@@ -56,7 +56,7 @@ class MenuUpdateApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "更新失败"}))
 
-class MenuDeleteApiHandler(BaseHandler):
+class MenuDeleteApiHandler(AdminBaseHandler):
     """删除菜单API"""
     @tornado.web.authenticated
     def post(self):
@@ -68,7 +68,7 @@ class MenuDeleteApiHandler(BaseHandler):
             self.set_status(400)
             self.write(json.dumps({"success": False, "message": "删除失败"}))
 
-class MenuPreviewApiHandler(BaseHandler):
+class MenuPreviewApiHandler(AdminBaseHandler):
     """菜单预览API"""
     @tornado.web.authenticated
     def get(self):
