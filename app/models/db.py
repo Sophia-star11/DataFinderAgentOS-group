@@ -115,6 +115,10 @@ def init_db():
             """
         )
 
+        try:
+            conn.execute("ALTER TABLE watch_sources ADD COLUMN source_type TEXT NOT NULL DEFAULT 'baidu_news'")
+        except Exception:
+            pass
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS watch_collected_data (

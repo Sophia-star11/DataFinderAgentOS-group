@@ -14,13 +14,16 @@ from app.controllers.user_chat import (
     UserConversationsApiHandler,
     UserChatApiHandler
 )
-from app.controllers.home import (IndexHandler, AdminIndexHandler, DashboardStatsApiHandler,
+from app.controllers.multimodal import ImageGenHandler, VideoGenHandler
+from app.controllers.user_export import UserExportPdfApiHandler
+from app.controllers.home import (IndexHandler, GestureHandler, AdminIndexHandler, DashboardStatsApiHandler,
     DataScreenHandler, DataScreenStatsApiHandler, DataScreenWordcloudApiHandler,
     DataScreenTrendsApiHandler, DataScreenSourceApiHandler, DataScreenSankeyApiHandler,
     OpinionScreenHandler, OpinionWarningsApiHandler, OpinionStatsApiHandler,
     OpinionAIAnalyzeApiHandler, OpinionAcknowledgeApiHandler, OpinionFeedbackApiHandler,
     OpinionScanApiHandler, SensitiveWordsApiHandler, SensitiveWordsCreateApiHandler,
     SensitiveWordsUpdateApiHandler, SensitiveWordsDeleteApiHandler)
+from app.controllers.auth import FaceLoginHandler
 from app.controllers.admin_user import (
     UserManagementHandler,
     UserListApiHandler,
@@ -133,6 +136,8 @@ cookie_secret=config.COOKIE_SECRET,
         (r"/chat", UserChatHandler),
         (r"/logout", LogoutHandler),
         (r"/index", IndexHandler),
+        (r"/gesture", GestureHandler),
+        (r"/face-login", FaceLoginHandler),
         (r"/admin/", AdminLoginHandler),
         (r"/admin/login", AdminLoginHandler),
         (r"/admin/logout", AdminLogoutHandler),
@@ -230,6 +235,9 @@ cookie_secret=config.COOKIE_SECRET,
         (r"/api/user/digital-employees", UserDigitalEmployeesApiHandler),
         (r"/api/user/conversations", UserConversationsApiHandler),
         (r"/api/user/chat", UserChatApiHandler),
+        (r"/api/user/image-gen", ImageGenHandler),
+        (r"/api/user/video-gen", VideoGenHandler),
+        (r"/api/user/export/pdf", UserExportPdfApiHandler),
     ],
     **settings
     )
