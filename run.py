@@ -17,7 +17,8 @@ from app.controllers.user_chat import (
 from app.controllers.mock_apis import (
     MockNewsHandler,
     MockMusicHandler,
-    MockMovieHandler
+    MockMovieHandler,
+    MockWeatherHandler
 )
 from app.controllers.multimodal import ImageGenHandler, VideoGenHandler
 from app.controllers.user_export import UserExportPdfApiHandler
@@ -247,6 +248,7 @@ cookie_secret=config.COOKIE_SECRET,
         # 内置API型数字员工（模拟）
         (r"/api/mock/news", MockNewsHandler),
         (r"/api/mock/music", MockMusicHandler),
+        (r"/api/mock/weather", MockWeatherHandler),
         (r"/api/mock/movie", MockMovieHandler),
     ],
     **settings

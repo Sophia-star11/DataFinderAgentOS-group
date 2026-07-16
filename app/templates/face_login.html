@@ -51,6 +51,7 @@ body{font-family:"Microsoft YaHei",sans-serif;background:linear-gradient(135deg,
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>if(typeof faceapi==='undefined'){document.write('<script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"><\/script>');}</script>
 <script>
 var modelsLoaded = false;
 var lastDescriptor = null;
@@ -97,12 +98,17 @@ async function startCamera() {
 
 async function detectFace() {
   var video = document.getElementById('webcam');
-  // 确保视频正在播放且有画面
   if (!video.srcObject || video.readyState < 2) {
-    setStatus('⏳ 摄像头准备中...', '');
+    setStatus('⏳ 摄像头准备中... (readyState=' + video.readyState + ')', '');
     return null;
   }
-  var options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+  // 确保画面尺寸有效
+  if (video.videoWidth === 0 || video.videoHeight === 0) {
+    setStatus('⏳ 摄像头画面未就绪，请稍等...', '');
+    return null;
+  }
+  // 降低阈值、提高输入尺寸以增强检测灵敏度
+  var options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.3 });
   var result = await faceapi.detectSingleFace(video, options)
     .withFaceLandmarks().withFaceDescriptor();
   if (result) {
@@ -125,13 +131,26 @@ function getStoredFaces() {
   } catch (e) { return {}; }
 }
 
+// 持续检测人脸，最多尝试 maxRetries 次，间隔 delayMs 毫秒
+async function detectFaceLoop(actionName, maxRetries, delayMs) {
+  for (var i = 0; i < maxRetries; i++) {
+    if (i > 0) {
+      setStatus('🔍 ' + actionName + '中... (第' + (i+1) + '次尝试)', '');
+    }
+    var result = await detectFace();
+    if (result) return true;
+    await new Promise(function(r) { setTimeout(r, delayMs); });
+  }
+  return false;
+}
+
 async function registerFace() {
   var name = prompt('请输入你的用户名（与系统账号一致）：');
   if (!name) return;
   userName = name;
-  setStatus('📸 正在检测人脸...');
-  var result = await detectFace();
-  if (!result) { setStatus('❌ 未检测到人脸，请正对摄像头', 'error'); return; }
+  setStatus('📸 正在检测人脸，请正对摄像头...', '');
+  var found = await detectFaceLoop('检测人脸', 60, 500);
+  if (!found) { setStatus('❌ 30秒内未检测到人脸，请确保光线充足、正对摄像头', 'error'); return; }
   var faces = getStoredFaces();
   faces[userName] = Array.from(lastDescriptor);
   localStorage.setItem('face_users', JSON.stringify(faces));
@@ -139,9 +158,9 @@ async function registerFace() {
 }
 
 async function loginFace() {
-  setStatus('🔍 正在识别人脸...');
-  var result = await detectFace();
-  if (!result) { setStatus('❌ 未检测到人脸', 'error'); return; }
+  setStatus('🔍 正在识别人脸，请正对摄像头...', '');
+  var found = await detectFaceLoop('识别', 60, 500);
+  if (!found) { setStatus('❌ 30秒内未检测到人脸，请确保光线充足、正对摄像头', 'error'); return; }
   var faces = getStoredFaces();
   var names = Object.keys(faces);
   if (names.length === 0) { setStatus('❌ 没有已注册的人脸，请先注册', 'error'); return; }
@@ -156,11 +175,10 @@ async function loginFace() {
 
   if (bestMatch) {
     setStatus('✅ 识别成功: ' + bestMatch + '，正在登录...', 'success');
-    // 调用后端登录
     try {
       var formData = new URLSearchParams();
       formData.append('username', bestMatch);
-      formData.append('password', '');  // face login uses special handling
+      formData.append('password', '');
       formData.append('face_login', '1');
       formData.append('_xsrf', getXsrfToken());
       var resp = await fetch('/face-login', {

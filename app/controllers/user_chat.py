@@ -1056,5 +1056,37 @@ def _call_builtin_mock_api(api_url):
             }
         }, ensure_ascii=False)
 
+    # 天气 Mock API
+    if "mock/weather" in path:
+        city = (query.get("city", ["成都"])[0]).strip() or "成都"
+        weather_map = {
+            "成都": {"desc": "多云转晴", "temp": 32, "humidity": 55, "wind": "东北风 3级", "aqi": 72},
+            "北京": {"desc": "晴", "temp": 28, "humidity": 35, "wind": "北风 4级", "aqi": 45},
+            "上海": {"desc": "小雨", "temp": 26, "humidity": 78, "wind": "东南风 2级", "aqi": 58},
+            "广州": {"desc": "雷阵雨", "temp": 33, "humidity": 82, "wind": "南风 3级", "aqi": 40},
+            "深圳": {"desc": "多云", "temp": 31, "humidity": 68, "wind": "西南风 2级", "aqi": 35},
+            "杭州": {"desc": "阴转多云", "temp": 29, "humidity": 62, "wind": "东风 2级", "aqi": 55},
+            "武汉": {"desc": "晴", "temp": 34, "humidity": 45, "wind": "南风 3级", "aqi": 60},
+            "西安": {"desc": "多云", "temp": 30, "humidity": 40, "wind": "东北风 2级", "aqi": 68},
+            "重庆": {"desc": "阴", "temp": 35, "humidity": 70, "wind": "北风 1级", "aqi": 80},
+        }
+        data = weather_map.get(city, weather_map["成都"])
+        text = (
+            f"【{city}天气】\n"
+            f"天气：{data['desc']}\n"
+            f"温度：{data['temp']}°C\n"
+            f"湿度：{data['humidity']}%\n"
+            f"风力：{data['wind']}\n"
+            f"空气质量指数(AQI)：{data['aqi']}"
+        )
+        return json.dumps({
+            "success": True,
+            "data": {
+                "content": text,
+                "responseFormat": "weather_card",
+                "extraData": dict(data, city=city)
+            }
+        }, ensure_ascii=False)
+
     # 默认：原样返回（未知的内置 API）
     return json.dumps({"success": False, "message": f"未知的内置 API: {path}"}, ensure_ascii=False)

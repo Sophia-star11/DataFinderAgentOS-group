@@ -450,6 +450,49 @@ class MockMusicHandler(BaseHandler):
         self.finish()
 
 
+# ====== 天气（本地 Mock，避免 wttr.in 国内不通） ======
+
+MOCK_WEATHER_DATA = {
+    "成都": {"desc": "多云转晴", "temp": 32, "humidity": 55, "wind": "东北风 3级", "aqi": 72},
+    "北京": {"desc": "晴", "temp": 28, "humidity": 35, "wind": "北风 4级", "aqi": 45},
+    "上海": {"desc": "小雨", "temp": 26, "humidity": 78, "wind": "东南风 2级", "aqi": 58},
+    "广州": {"desc": "雷阵雨", "temp": 33, "humidity": 82, "wind": "南风 3级", "aqi": 40},
+    "深圳": {"desc": "多云", "temp": 31, "humidity": 68, "wind": "西南风 2级", "aqi": 35},
+    "杭州": {"desc": "阴转多云", "temp": 29, "humidity": 62, "wind": "东风 2级", "aqi": 55},
+    "武汉": {"desc": "晴", "temp": 34, "humidity": 45, "wind": "南风 3级", "aqi": 60},
+    "西安": {"desc": "多云", "temp": 30, "humidity": 40, "wind": "东北风 2级", "aqi": 68},
+    "重庆": {"desc": "阴", "temp": 35, "humidity": 70, "wind": "北风 1级", "aqi": 80},
+}
+
+class MockWeatherHandler(BaseHandler):
+    """本地天气 Mock API"""
+    def get(self):
+        city = self.get_argument("city", "成都")
+        data = MOCK_WEATHER_DATA.get(city, MOCK_WEATHER_DATA.get("成都", {}))
+        text = (
+            f"【{city}天气】\n"
+            f"天气：{data['desc']}\n"
+            f"温度：{data['temp']}°C\n"
+            f"湿度：{data['humidity']}%\n"
+            f"风力：{data['wind']}\n"
+            f"空气质量指数(AQI)：{data['aqi']}"
+        )
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({
+            "success": True,
+            "data": {
+                "content": text,
+                "responseFormat": "weather_card",
+                "extraData": {
+                    "city": city, "weather": data["desc"],
+                    "temperature": data["temp"], "humidity": data["humidity"],
+                    "wind": data["wind"], "aqi": data["aqi"]
+                }
+            }
+        }, ensure_ascii=False))
+        self.finish()
+
+
 # ====== 电影（豆瓣API搜索 + 本地详情库补充） ======
 
 DOUBAN_HEADERS = {
