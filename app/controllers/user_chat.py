@@ -493,6 +493,7 @@ class UserChatApiHandler(BaseHandler):
         }
     async def post(self):
         if not self.current_user:
+            logger.warning("UserChatApiHandler.post: 用户未登录")
             self.write(json.dumps({"success": False, "message": "未登录"}))
             return
 
@@ -501,6 +502,8 @@ class UserChatApiHandler(BaseHandler):
         model_id = self.get_argument("model_id", "")
         employee_id = self.get_argument("employee_id", "")
         system_prompt = self.get_argument("system_prompt", "")
+
+        logger.info(f"UserChat: employee_id={employee_id!r} model_id={model_id!r} msg_count={len(messages)}")
 
         # 解析消息
         try:
@@ -514,12 +517,18 @@ class UserChatApiHandler(BaseHandler):
 
         # 如果指定了数字员工，优先使用数字员工的模型
         if employee_id:
+            logger.info(f"UserChat: 加载员工 employee_id={employee_id}")
             employee = DigitalEmployeeRepository.get_by_id(int(employee_id))
             if employee and employee.get("status") == 1:
+                logger.info(f"UserChat: 员工 {employee['name']} type={employee['type']} model_id={employee.get('model_id')}")
                 if employee["type"] == "llm":
                     # LLM型：使用关联模型
                     if employee.get("model_id"):
                         model = AiModelRepository.get_by_id(employee["model_id"])
+                        if model:
+                            logger.info(f"UserChat: 加载模型 {model['name']} (id={model['id']}) api_base={model.get('api_base_url','')[:30]}...")
+                        else:
+                            logger.warning(f"UserChat: 模型ID {employee['model_id']} 未找到!")
                     # 使用数字员工的系统提示词
                     if employee.get("system_prompt"):
                         final_system_prompt = employee["system_prompt"]
@@ -667,15 +676,49 @@ class UserChatApiHandler(BaseHandler):
             model = AiModelRepository.get_default()
 
         if not model:
+            logger.warning("UserChat: 无可用模型")
             self.write(json.dumps({"success": False, "message": "无可用模型，请联系管理员配置"}))
             return
+
+        logger.info(f"UserChat: 最终使用模型 model_name={model.get('model_name')} api_base={model.get('api_base_url','')[:30] if model.get('api_base_url') else 'N/A'}")
 
         # 构建消息列表
         api_messages = []
         if final_system_prompt:
+            logger.info(f"UserChat: 使用system_prompt (length={len(final_system_prompt)})")
             api_messages.append({"role": "system", "content": final_system_prompt})
         elif model.get("system_prompt"):
             api_messages.append({"role": "system", "content": model["system_prompt"]})
+
+        # 截断历史消息：避免超出模型上下文窗口
+        # 使用字符数粗估 token 数（中文约 1.5-2 chars/token，英文约 4 chars/token）
+        context_window = model.get("context_length", 4096) or 4096
+        max_tokens_for_response = 512  # 预留响应 token
+        max_prompt_chars = (context_window - max_tokens_for_response) * 2  # 按保守估算
+
+        # 计算 system_prompt 字符数
+        system_chars = 0
+        for m in api_messages:
+            if m["role"] == "system" and m.get("content"):
+                system_chars += len(m["content"])
+
+        total_chars = system_chars + sum(len(m.get("content", "")) for m in msg_list)
+        truncated = False
+
+        # 如果总字符数超限，从旧到新删除历史消息
+        while total_chars > max_prompt_chars and len(msg_list) > 1:
+            removed = msg_list.pop(0)  # 移除最早的消息
+            total_chars -= len(removed.get("content", ""))
+            truncated = True
+
+        if truncated:
+            logger.info(f"UserChat: 截断历史消息至 {len(msg_list)} 条 (总字符 {total_chars} 约 {total_chars//2} tokens)")
+        elif system_chars > max_prompt_chars:
+            logger.warning(f"UserChat: system_prompt ({system_chars} chars) 超出限制，强制截取前 {max_prompt_chars} 字符")
+            for m in api_messages:
+                if m["role"] == "system" and m.get("content"):
+                    m["content"] = m["content"][:max_prompt_chars]
+
         api_messages.extend(msg_list)
 
         # 检查API配置
@@ -684,8 +727,11 @@ class UserChatApiHandler(BaseHandler):
         model_name = model.get("model_name") or ""
 
         if not api_base or not api_key:
+            logger.warning(f"UserChat: API配置不完整 api_base={bool(api_base)} api_key={bool(api_key)}")
             self.write(json.dumps({"success": False, "message": "模型API配置不完整（缺少API地址或密钥）"}))
             return
+
+        logger.info(f"UserChat: 开始调用LLM API model={model_name} stream=True")
 
         # 构建API请求
         url = f"{api_base}/chat/completions"
@@ -695,14 +741,21 @@ class UserChatApiHandler(BaseHandler):
         }
         temperature = float(model.get("temperature", 0.7))
         top_p = float(model.get("top_p", 1.0))
-        max_tokens = int(model.get("max_tokens", 4096))
+        max_tokens_config = int(model.get("max_tokens", 2048))
+        # 计算安全的 max_tokens：上下文窗口 - 当前prompt token数估算 - 余量
+        # 中文约 2 chars/token，英文约 4 chars/token，按保守 2 chars/token 估算
+        estimated_prompt_tokens = total_chars // 2
+        safe_max_tokens = min(max_tokens_config, context_window - estimated_prompt_tokens - 128)
+        safe_max_tokens = max(safe_max_tokens, 128)  # 至少128 tokens
+        logger.info(f"UserChat: max_tokens={safe_max_tokens} (config={max_tokens_config}, prompt_est={estimated_prompt_tokens}, ctx={context_window})")
+
         body = json.dumps({
             "model": model_name,
             "messages": api_messages,
             "stream": True,
             "temperature": temperature,
             "top_p": top_p,
-            "max_tokens": max_tokens
+            "max_tokens": safe_max_tokens
         })
 
         # 设置SSE响应头
@@ -762,6 +815,7 @@ class UserChatApiHandler(BaseHandler):
             await client.fetch(request)
         except Exception as e:
             error_msg = str(e)
+            logger.error(f"UserChat: LLM API调用异常: {error_msg[:200]}")
             if "401" in error_msg or "Unauthorized" in error_msg:
                 friendly_msg = "API认证失败，请检查API密钥是否正确"
             elif "404" in error_msg:
@@ -773,6 +827,7 @@ class UserChatApiHandler(BaseHandler):
             else:
                 friendly_msg = f"API请求异常: {error_msg[:100]}"
             error_response = json.dumps({"error": {"message": friendly_msg, "type": "api_error"}})
+            logger.error(f"UserChat: 返回错误SSE: {friendly_msg}")
             self.write(f"data: {error_response}\n\n")
 
         # 更新token统计
