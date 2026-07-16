@@ -917,6 +917,20 @@ class UserChatApiHandler(BaseHandler):
                             pass
                 except Exception:
                     pass
+            else:
+                # 无 template：检查是否内置 Mock API 的自描述格式
+                try:
+                    resp_json = resp.json()
+                    if resp_json.get("success") and "data" in resp_json:
+                        data = resp_json["data"]
+                        if data.get("responseFormat"):
+                            response_format = data["responseFormat"]
+                            extra_data = data.get("extraData", {})
+                            txt = data.get("content", "")
+                            if txt:
+                                result_text = txt
+                except Exception:
+                    pass
 
             elapsed = time.time() - start_time
             response_data = json.dumps({

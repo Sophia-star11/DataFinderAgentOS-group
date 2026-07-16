@@ -484,6 +484,79 @@
       bubble.appendChild(card);
     }
 
+    // 渲染新闻卡片列表
+    if (role === 'ai' && extra.responseFormat === 'news_list' && extra.extraData?.list) {
+      const news = extra.extraData.list;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      let html = '<div class="data-card-header">📰 热门新闻速递</div><div class="news-list" style="padding:4px 0;">';
+      news.forEach(function(item, idx) {
+        html += `
+          <div style="padding:10px 12px;border-bottom:1px solid #f0f0f0;${idx === news.length-1 ? 'border-bottom:none;' : ''}">
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">
+              <a href="${item.link}" target="_blank" style="color:#1a73e8;text-decoration:none;">${item.title}</a>
+            </div>
+            <div style="font-size:12px;color:#888;margin-bottom:4px;">
+              📍 ${item.source}  🕐 ${item.time}
+            </div>
+            <div style="font-size:13px;color:#555;line-height:1.5;">${item.summary}</div>
+          </div>`;
+      });
+      html += '</div>';
+      card.innerHTML = html;
+      bubble.appendChild(card);
+    }
+
+    // 渲染音乐播放器
+    if (role === 'ai' && extra.responseFormat === 'music_player' && extra.extraData?.url) {
+      const d = extra.extraData;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      card.innerHTML = `
+        <div class="data-card-header">🎵 随机音乐推荐</div>
+        <div style="display:flex;align-items:center;padding:12px;">
+          <img src="${d.cover || 'https://picsum.photos/seed/music/100/100'}" 
+               alt="${d.song}" 
+               style="width:80px;height:80px;border-radius:8px;object-fit:cover;margin-right:14px;"
+               onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22%3E%3Crect fill=%22%23ddd%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2220%22 y=%2248%22 font-size=%2212%22 fill=%22%23999%22%3E🎵%3C/text%3E%3C/svg%3E'">
+          <div style="flex:1;">
+            <div style="font-size:16px;font-weight:600;color:#333;">${d.song}</div>
+            <div style="font-size:13px;color:#888;margin:4px 0 8px;">${d.artist}</div>
+            <audio controls style="width:100%;height:36px;" preload="none">
+              <source src="${d.url}" type="audio/mpeg">
+              您的浏览器不支持 audio 标签
+            </audio>
+          </div>
+        </div>
+      `;
+      bubble.appendChild(card);
+    }
+
+    // 渲染电影详情
+    if (role === 'ai' && extra.responseFormat === 'movie_detail' && extra.extraData?.title) {
+      const d = extra.extraData;
+      const card = document.createElement('div');
+      card.className = 'data-card';
+      card.innerHTML = `
+        <div class="data-card-header">🎬 电影详情</div>
+        <div style="display:flex;padding:12px;gap:14px;">
+          <img src="${d.poster || 'https://picsum.photos/seed/movie/150/200'}" 
+               alt="${d.title}" 
+               style="width:120px;height:180px;border-radius:6px;object-fit:cover;flex-shrink:0;"
+               onerror="this.style.display='none'">
+          <div style="flex:1;">
+            <div style="font-size:17px;font-weight:600;color:#222;margin-bottom:4px;">${d.title} <span style="font-size:13px;color:#999;font-weight:400;">(${d.year})</span></div>
+            <div style="font-size:13px;color:#e6a23c;margin-bottom:8px;">⭐ ${d.rating}</div>
+            <div style="font-size:13px;color:#555;margin-bottom:4px;"><b>导演：</b>${d.director}</div>
+            <div style="font-size:13px;color:#555;margin-bottom:8px;"><b>演员：</b>${(d.actors || []).join(' / ')}</div>
+            <div style="font-size:13px;color:#666;line-height:1.6;margin-bottom:10px;max-height:80px;overflow-y:auto;">${d.summary}</div>
+            <a href="${d.url}" target="_blank" style="display:inline-block;padding:6px 18px;background:#e74c3c;color:#fff;border-radius:4px;text-decoration:none;font-size:13px;">▶ 观看影片</a>
+          </div>
+        </div>
+      `;
+      bubble.appendChild(card);
+    }
+
     // 渲染数据卡片（通用卡片 - 根据card_config渲染）
     if (role === 'ai' && extra.responseFormat === 'data_card' && extra.extraData?.cardFields) {
       const cardData = extra.extraData;

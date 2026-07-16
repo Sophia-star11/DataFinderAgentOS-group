@@ -1,0 +1,8 @@
+{
+  "_说明": "在此文件中配置外部API密钥，未配置时系统会自动降级为模拟数据或网页抓取",
+  "juhe_news": {
+    "enabled": false,
+    "key": "",
+    "说明": "聚合数据新闻头条API (https://www.juhe.cn/docs/api/id/235)，免费100次/天"
+  }
+}

@@ -1,0 +1,539 @@
+"""内置模拟 API 型数字员工（新闻/音乐/电影）
+    
+返回带 self-describing 格式的统一 JSON 结构：
+    {"success": true, "data": {"content": "...", "responseFormat": "...", "extraData": {...}}}
+"""
+
+import json
+import os
+import random
+import re
+import urllib.parse
+import requests
+from .base import BaseHandler
+
+
+# ==============================
+#  配置加载（外部API密钥）
+# ==============================
+
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "api_keys.json")
+
+def _load_api_keys():
+    """加载 config/api_keys.json 中的外部 API 密钥"""
+    try:
+        if os.path.exists(_CONFIG_PATH):
+            with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+# ==============================
+#  新闻模块（实时 + 模拟兜底）
+# ==============================
+
+NEWS_MOCK = [
+    {
+        "title": "国务院印发《数字中国建设整体布局规划》",
+        "source": "新华社",
+        "time": "2026-07-15 14:30",
+        "summary": "《规划》明确，数字中国建设按照'2522'的整体框架进行布局，到2035年数字化发展水平进入世界前列。",
+        "link": "https://www.xinhuanet.com/2026-07/15/c_112.html"
+    },
+    {
+        "title": "2026世界人工智能大会在上海开幕",
+        "source": "人民日报",
+        "time": "2026-07-15 10:00",
+        "summary": "本届大会以'智能无界·引领未来'为主题，汇聚全球顶尖AI科学家与企业家，展示AI最新技术与应用。",
+        "link": "https://www.people.com.cn/2026-07/15/ai.html"
+    },
+    {
+        "title": "我国成功发射新一代气象卫星",
+        "source": "央视新闻",
+        "time": "2026-07-14 22:15",
+        "summary": "该卫星将大幅提升我国天气预报和气候变化监测能力，服务'一带一路'沿线国家。",
+        "link": "https://news.cctv.com/2026/07/14/satellite.html"
+    },
+    {
+        "title": "新能源汽车产销同比增长48%",
+        "source": "经济日报",
+        "time": "2026-07-14 16:45",
+        "summary": "上半年我国新能源汽车产销分别完成378.8万辆和374.7万辆，市场占有率达35.2%。",
+        "link": "https://www.ce.cn/2026-07/14/ev.html"
+    },
+    {
+        "title": "教育部：2026年新增人工智能专业点200个",
+        "source": "中国教育报",
+        "time": "2026-07-14 09:30",
+        "summary": "教育部表示将进一步扩大AI相关专业人才培养规模，推动产教深度融合。",
+        "link": "https://www.jyb.cn/2026-07/14/ai-edu.html"
+    },
+    {
+        "title": "国产大模型通过国家备案，向全社会开放",
+        "source": "科技日报",
+        "time": "2026-07-13 18:20",
+        "summary": "多个国产大模型通过《生成式人工智能服务管理暂行办法》备案，正式向公众开放服务。",
+        "link": "https://www.stdaily.com/2026-07/13/llm.html"
+    },
+    {
+        "title": "医保谈判结果公布：67种药品平均降价61.7%",
+        "source": "健康报",
+        "time": "2026-07-13 11:00",
+        "summary": "本次谈判涉及肿瘤、慢性病、罕见病等多个治疗领域，预计为患者减负超300亿元。",
+        "link": "https://www.jkb.com.cn/2026-07/13/medical.html"
+    },
+    {
+        "title": "杭州亚运会场馆全面向市民开放",
+        "source": "浙江日报",
+        "time": "2026-07-12 15:30",
+        "summary": "亚运会场馆赛后利用方案公布，所有场馆已实现'还馆于民'，市民可预约使用。",
+        "link": "https://zjnews.zjol.com.cn/2026-07/12/asiangames.html"
+    },
+    {
+        "title": "全球首个商用核聚变项目启动建设",
+        "source": "环球时报",
+        "time": "2026-07-12 08:00",
+        "summary": "该项目位于法国，计划2030年投入运行，标志着清洁能源领域里程碑式突破。",
+        "link": "https://www.huanqiu.com/2026-07/12/fusion.html"
+    },
+    {
+        "title": "暑期档票房突破200亿元，创历史新高",
+        "source": "中国电影报",
+        "time": "2026-07-11 20:45",
+        "summary": "国产影片《流浪地球3》以45亿票房领跑，多部国产动画电影表现亮眼。",
+        "link": "https://www.chinafilm.com/2026-07/11/boxoffice.html"
+    },
+    {
+        "title": "全国首个5G-A商用网络在深圳开通",
+        "source": "深圳特区报",
+        "time": "2026-07-11 14:20",
+        "summary": "5G-A（5.5G）网络在深圳实现全域覆盖，峰值速率可达10Gbps，支撑自动驾驶等应用。",
+        "link": "https://www.sznews.com/2026-07/11/5ga.html"
+    },
+    {
+        "title": "央行发布数字人民币最新进展",
+        "source": "金融时报",
+        "time": "2026-07-10 17:30",
+        "summary": "数字人民币试点已覆盖26个省市，交易额突破万亿元，跨境支付场景持续拓展。",
+        "link": "https://www.financialnews.com.cn/2026-07/10/dcep.html"
+    }
+]
+
+# Baidu News 请求头（模拟浏览器）
+_BAIDU_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    "sec-ch-ua": '"Not)A;Brand";v="8", "Chromium";v="138"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+}
+
+
+def _fetch_baidu_news():
+    """从百度新闻抓取实时热门新闻（搜索'热点'）
+
+    返回: list[dict] 或 None（失败时返回 None）
+    """
+    try:
+        url = "https://www.baidu.com/s?rtt=1&bsst=1&cl=2&tn=news&rsv_dl=ns_pc&" + \
+              urllib.parse.urlencode({"word": "热点"})
+        resp = requests.get(url, headers=_BAIDU_HEADERS, timeout=10)
+        if resp.status_code != 200:
+            return None
+
+        html = resp.text
+        items = []
+
+        # 匹配百度新闻标题和链接
+        title_links = re.findall(
+            r'<h3[^>]*>.*?<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+            html, re.DOTALL
+        )
+        if not title_links:
+            title_links = re.findall(
+                r'<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+                html, re.DOTALL
+            )
+
+        # 匹配摘要
+        summaries = re.findall(
+            r'<span[^>]*class="[^"]*content-right[^"]*"[^>]*>(.*?)</span>',
+            html, re.DOTALL
+        )
+        if not summaries:
+            summaries = re.findall(
+                r'<div[^>]*class="[^"]*c-abstract[^"]*"[^>]*>(.*?)</div>',
+                html, re.DOTALL
+            )
+
+        # 匹配来源和时间（百度新闻来源格式）
+        sources = re.findall(
+            r'<span[^>]*class="[^"]*c-color-gray[^"]*"[^>]*>(.*?)</span>',
+            html, re.DOTALL
+        )
+
+        seen_titles = set()
+        for i, (url_link, raw_title) in enumerate(title_links):
+            title = re.sub(r'<[^>]+>', '', raw_title).strip()
+            if not title or len(title) < 4 or title in seen_titles:
+                continue
+            seen_titles.add(title)
+
+            # 提取来源
+            source = "百度新闻"
+            time_str = ""
+            source_text = sources[i] if i < len(sources) else ""
+            # 来源通常格式如 "新华网 1小时前" 或 "央视新闻"
+            parts = re.split(r'\s+', source_text.strip()) if source_text else []
+            if parts:
+                source = re.sub(r'<[^>]+>', '', parts[0]).strip()
+                if len(parts) > 1:
+                    time_str = re.sub(r'<[^>]+>', '', parts[1]).strip()
+
+            # 摘要
+            summary = ""
+            if i < len(summaries):
+                summary = re.sub(r'<[^>]+>', '', summaries[i]).strip()
+            summary = re.sub(r'\s+', ' ', summary)[:200]
+
+            items.append({
+                "title": title,
+                "source": source,
+                "time": time_str,
+                "summary": summary,
+                "link": url_link.strip()
+            })
+
+            if len(items) >= 15:
+                break
+
+        if len(items) >= 5:
+            return items
+        return None
+    except Exception:
+        return None
+
+
+def _fetch_juhe_news():
+    """从聚合数据新闻头条API获取实时新闻
+
+    返回: list[dict] 或 None（失败时返回 None）
+    """
+    config = _load_api_keys()
+    juhe = config.get("juhe_news", {})
+    if not juhe.get("enabled") or not juhe.get("key"):
+        return None
+
+    try:
+        resp = requests.get(
+            "http://v.juhe.cn/toutiao/index",
+            params={"type": "top", "key": juhe["key"]},
+            timeout=10
+        )
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        if data.get("error_code") != 0:
+            return None
+
+        result_list = data.get("result", {}).get("data", [])
+        items = []
+        for item in result_list:
+            items.append({
+                "title": item.get("title", ""),
+                "source": item.get("author_name", ""),
+                "time": item.get("date", ""),
+                "summary": item.get("title", ""),
+                "link": item.get("url", "")
+            })
+            if len(items) >= 15:
+                break
+
+        if len(items) >= 5:
+            return items
+        return None
+    except Exception:
+        return None
+
+
+def _get_live_news():
+    """实时新闻获取（三层兜底）
+
+    优先级：聚合数据API → 百度新闻抓取 → 模拟数据
+    返回: list[dict]
+    """
+    now = __import__("datetime").datetime.now().strftime("%Y年%m月%d日 %H:%M")
+
+    # 第1层：聚合数据API
+    items = _fetch_juhe_news()
+    if items:
+        print(f"[新闻] 聚合数据API获取成功 ({len(items)}条)")
+        return items, now
+
+    # 第2层：百度新闻抓取
+    items = _fetch_baidu_news()
+    if items:
+        print(f"[新闻] 百度新闻抓取成功 ({len(items)}条)")
+        return items, now
+
+    # 第3层：模拟数据兜底
+    fallback = random.sample(NEWS_MOCK, min(len(NEWS_MOCK), random.randint(10, 12)))
+    fallback.sort(key=lambda x: x["time"], reverse=True)
+    print(f"[新闻] 使用模拟数据兜底 ({len(fallback)}条)")
+    return fallback, now
+
+
+class MockNewsHandler(BaseHandler):
+    """返回热门新闻（实时优先，模拟数据兜底）"""
+    def get(self):
+        items, fetch_time = _get_live_news()
+
+        text_lines = [f"📰 **热门新闻速递**（{fetch_time}）\n"]
+        for i, item in enumerate(items, 1):
+            text_lines.append(
+                f"{i}. **[{item['title']}]({item['link']})**\n"
+                f"   📍 {item['source']}{'  🕐 ' + item['time'] if item.get('time') else ''}\n"
+                f"   {item['summary']}"
+            )
+
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({
+            "success": True,
+            "data": {
+                "content": "\n\n".join(text_lines),
+                "responseFormat": "news_list",
+                "extraData": {"list": items}
+            }
+        }, ensure_ascii=False))
+        self.finish()
+
+
+# ====== 随机音乐 ======
+
+MUSIC_LIST = [
+    {"song": "夜曲", "artist": "周杰伦", "cover": "https://picsum.photos/seed/yequ/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"},
+    {"song": "起风了", "artist": "买辣椒也用券", "cover": "https://picsum.photos/seed/qifengle/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"},
+    {"song": "成都", "artist": "赵雷", "cover": "https://picsum.photos/seed/chengdu/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"},
+    {"song": "平凡之路", "artist": "朴树", "cover": "https://picsum.photos/seed/pingfan/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3"},
+    {"song": "孤勇者", "artist": "陈奕迅", "cover": "https://picsum.photos/seed/guyongzhe/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"},
+    {"song": "光年之外", "artist": "邓紫棋", "cover": "https://picsum.photos/seed/gnzw/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3"},
+    {"song": "稻香", "artist": "周杰伦", "cover": "https://picsum.photos/seed/daoxiang/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3"},
+    {"song": "小幸运", "artist": "田馥甄", "cover": "https://picsum.photos/seed/xxy/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"},
+    {"song": "演员", "artist": "薛之谦", "cover": "https://picsum.photos/seed/yanyuan/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3"},
+    {"song": "大鱼", "artist": "周深", "cover": "https://picsum.photos/seed/dayu/300/300", "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3"},
+]
+
+
+class MockMusicHandler(BaseHandler):
+    """随机推荐一首音乐"""
+    def get(self):
+        item = random.choice(MUSIC_LIST)
+        text = f"🎵 **随机音乐推荐**\n\n**{item['song']}** - {item['artist']}"
+
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({
+            "success": True,
+            "data": {
+                "content": text,
+                "responseFormat": "music_player",
+                "extraData": {
+                    "song": item["song"],
+                    "artist": item["artist"],
+                    "cover": item["cover"],
+                    "url": item["url"]
+                }
+            }
+        }, ensure_ascii=False))
+        self.finish()
+
+
+# ====== 电影 ======
+
+MOVIE_DB = {
+    "哪吒": {
+        "title": "哪吒之魔童降世",
+        "director": "饺子",
+        "actors": ["吕艳婷", "囧森瑟夫", "瀚墨", "陈浩", "绿绮"],
+        "summary": "天地灵气孕育出一颗混元珠，元始天尊将混元珠提炼成灵珠和魔丸。太乙真人受命将灵珠托生于陈塘关李靖家，却因申公豹的调包，灵珠和魔丸被掉包。本应是灵珠转世的哪吒成了魔丸转世。三年后，哪吒将面临天劫…",
+        "rating": "8.4",
+        "year": "2019",
+        "poster": "https://picsum.photos/seed/nz/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26280/"
+    },
+    "流浪地球": {
+        "title": "流浪地球3",
+        "director": "郭帆",
+        "actors": ["吴京", "刘德华", "李雪健", "王智"],
+        "summary": "太阳即将毁灭，人类在地球表面建造了巨大的推进器，开启'流浪地球'计划。面对前所未有的挑战，人类团结一致，守护共同的家园。",
+        "rating": "9.2",
+        "year": "2026",
+        "poster": "https://picsum.photos/seed/liulang/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26300/"
+    },
+    "满江红": {
+        "title": "满江红",
+        "director": "张艺谋",
+        "actors": ["沈腾", "易烊千玺", "张译", "雷佳音"],
+        "summary": "南宋绍兴年间，岳飞死后四年，秦桧率兵与金国会谈。一桩离奇的命案在会谈前夜发生，引发了各方势力的暗中博弈。",
+        "rating": "7.6",
+        "year": "2023",
+        "poster": "https://picsum.photos/seed/mjh/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26290/"
+    },
+    "长津湖": {
+        "title": "长津湖",
+        "director": "陈凯歌 / 徐克 / 林超贤",
+        "actors": ["吴京", "易烊千玺", "段奕宏", "朱亚文"],
+        "summary": "以抗美援朝战争第二次战役中的长津湖战役为背景，讲述中国人民志愿军在极寒严酷环境下，凭借钢铁意志和英勇无畏的战斗精神奋勇杀敌的故事。",
+        "rating": "7.6",
+        "year": "2021",
+        "poster": "https://picsum.photos/seed/cjh/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26270/"
+    },
+    "战狼2": {
+        "title": "战狼2",
+        "director": "吴京",
+        "actors": ["吴京", "弗兰克·格里罗", "吴刚", "张翰"],
+        "summary": "原特种兵冷锋遭遇人生滑铁卢，被开除军籍。在非洲某国发生政变时，他本可安全撤离，却因无法忘记曾经为军人的使命，孤身犯险冲回沦陷区，带领被困民众展开生死逃亡。",
+        "rating": "7.1",
+        "year": "2017",
+        "poster": "https://picsum.photos/seed/zl2/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26260/"
+    },
+    "你好李焕英": {
+        "title": "你好，李焕英",
+        "director": "贾玲",
+        "actors": ["贾玲", "张小斐", "沈腾", "陈赫"],
+        "summary": "2001年的某一天，刚考上大学的贾晓玲经历了人生中的一次大起大落。她意外穿越到1981年，与年轻时的母亲李焕英相遇，二人成为好朋友。",
+        "rating": "7.8",
+        "year": "2021",
+        "poster": "https://picsum.photos/seed/lhy/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26250/"
+    },
+    "红海行动": {
+        "title": "红海行动",
+        "director": "林超贤",
+        "actors": ["张译", "黄景瑜", "海清", "杜江"],
+        "summary": "中国海军蛟龙突击队8人小组奉命执行撤侨任务，在恶劣环境下一路护送侨民撤离，同时与恐怖分子展开激烈交锋。",
+        "rating": "8.3",
+        "year": "2018",
+        "poster": "https://picsum.photos/seed/hhxd/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26240/"
+    },
+    "我不是药神": {
+        "title": "我不是药神",
+        "director": "文牧野",
+        "actors": ["徐峥", "王传君", "周一围", "谭卓"],
+        "summary": "一位保健品店主从印度代购廉价的仿制药来治疗白血病，被病友封为'药神'。随着利益和法律的冲突加剧，他的道德困境也逐渐显现。",
+        "rating": "9.0",
+        "year": "2018",
+        "poster": "https://picsum.photos/seed/yys/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26230/"
+    },
+    "深海": {
+        "title": "深海",
+        "director": "田晓鹏",
+        "actors": ["苏鑫", "王亭文"],
+        "summary": "小女孩参宿误入奇幻的深海世界，在神秘男孩南河的陪伴下，展开了一段独特而治愈的心灵之旅。",
+        "rating": "8.7",
+        "year": "2023",
+        "poster": "https://picsum.photos/seed/shenhai/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26220/"
+    },
+    "刺杀小说家": {
+        "title": "刺杀小说家",
+        "director": "路阳",
+        "actors": ["雷佳音", "杨幂", "董子健", "于和伟"],
+        "summary": "一位父亲为寻找失踪的女儿，接下刺杀小说家的任务。与此同时，小说家笔下的奇幻世界正悄然影响着现实世界的走向。",
+        "rating": "6.6",
+        "year": "2021",
+        "poster": "https://picsum.photos/seed/csxsj/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26210/"
+    },
+    "白蛇缘起": {
+        "title": "白蛇：缘起",
+        "director": "黄家康 / 赵霁",
+        "actors": ["张喆", "杨天翔", "唐小喜"],
+        "summary": "晚唐年间，国师发动民众捕蛇。白蛇失去记忆被少年阿宣救下，两人在寻找记忆的过程中逐渐萌生爱意，共同对抗国师的阴谋。",
+        "rating": "8.5",
+        "year": "2019",
+        "poster": "https://picsum.photos/seed/baishe/400/600",
+        "url": "https://www.bilibili.com/bangumi/play/ss26200/"
+    }
+}
+
+ADDITIONAL_MOVIES = [
+    {"title": "唐人街探案3", "director": "陈思诚", "actors": ["王宝强", "刘昊然", "妻夫木聪"], "summary": "唐仁和秦风受邀前往东京，调查一桩离奇的谋杀案，在错综复杂的线索中揭开真相。", "rating": "5.3", "year": "2021", "poster": "https://picsum.photos/seed/trj3/400/600", "url": "https://www.bilibili.com/bangumi/play/ss26190/"},
+    {"title": "孤注一掷", "director": "申奥", "actors": ["张艺兴", "金晨", "咏梅", "王传君"], "summary": "程序员潘生和模特安娜被骗至海外诈骗工厂，在生死边缘挣扎求生，最终配合警方捣毁犯罪团伙。", "rating": "7.3", "year": "2023", "poster": "https://picsum.photos/seed/gzyz/400/600", "url": "https://www.bilibili.com/bangumi/play/ss26180/"},
+    {"title": "飞驰人生2", "director": "韩寒", "actors": ["沈腾", "范丞丞", "尹正", "张本煜"], "summary": "曾经的赛车冠军张驰重返赛道，带领新人车手共同追逐梦想，在巴音布鲁克赛道上书写传奇。", "rating": "7.8", "year": "2024", "poster": "https://picsum.photos/seed/fcrs2/400/600", "url": "https://www.bilibili.com/bangumi/play/ss26170/"},
+    {"title": "封神第一部", "director": "乌尔善", "actors": ["黄渤", "费翔", "李雪健", "娜然"], "summary": "商王殷寿残暴无道，姬发觉醒昆仑之力，集结各路英雄对抗暴政，揭开封神榜的传奇序幕。", "rating": "7.8", "year": "2023", "poster": "https://picsum.photos/seed/fengshen/400/600", "url": "https://www.bilibili.com/bangumi/play/ss26160/"},
+]
+
+ALL_MOVIES = {}
+ALL_MOVIES.update(MOVIE_DB)
+for m in ADDITIONAL_MOVIES:
+    ALL_MOVIES[m["title"]] = m
+
+
+class MockMovieHandler(BaseHandler):
+    """支持按片名搜索和随机推荐"""
+    def get(self):
+        keyword = self.get_argument("keyword", "").strip()
+
+        if keyword:
+            # 按关键词搜索
+            matched = []
+            for name, info in ALL_MOVIES.items():
+                if keyword in name or any(keyword in a for a in info["actors"]):
+                    matched.append(info)
+            if not matched:
+                self.set_header("Content-Type", "application/json")
+                self.write(json.dumps({
+                    "success": True,
+                    "data": {
+                        "content": f"😅 未找到与「{keyword}」相关的电影信息，试试其他关键词吧！",
+                        "responseFormat": "text",
+                        "extraData": {}
+                    }
+                }, ensure_ascii=False))
+                self.finish()
+                return
+            selected = random.choice(matched)
+        else:
+            # 随机推荐
+            selected = random.choice(list(ALL_MOVIES.values()))
+
+        text = (
+            f"🎬 **{selected['title']}** ({selected['year']})\n\n"
+            f"⭐ 评分：**{selected['rating']}**\n"
+            f"🎥 导演：{selected['director']}\n"
+            f"👥 演员：{' / '.join(selected['actors'])}\n\n"
+            f"📖 **剧情简介**\n{selected['summary']}\n\n"
+            f"🔗 [观看链接]({selected['url']})"
+        )
+
+        self.set_header("Content-Type", "application/json")
+        self.write(json.dumps({
+            "success": True,
+            "data": {
+                "content": text,
+                "responseFormat": "movie_detail",
+                "extraData": {
+                    "title": selected["title"],
+                    "director": selected["director"],
+                    "actors": selected["actors"],
+                    "summary": selected["summary"],
+                    "rating": selected["rating"],
+                    "year": selected["year"],
+                    "poster": selected["poster"],
+                    "url": selected["url"]
+                }
+            }
+        }, ensure_ascii=False))
+        self.finish()

@@ -13,6 +13,11 @@ from app.controllers.user_chat import (
     UserConversationsApiHandler,
     UserChatApiHandler
 )
+from app.controllers.mock_apis import (
+    MockNewsHandler,
+    MockMusicHandler,
+    MockMovieHandler
+)
 from app.controllers.multimodal import ImageGenHandler, VideoGenHandler
 from app.controllers.user_export import UserExportPdfApiHandler
 from app.controllers.home import (IndexHandler, GestureHandler, AdminIndexHandler, DashboardStatsApiHandler,
@@ -262,6 +267,11 @@ def webapp():
         (r"/api/user/image-gen", ImageGenHandler),
         (r"/api/user/video-gen", VideoGenHandler),
         (r"/api/user/export/pdf", UserExportPdfApiHandler),
+        
+        # 内置API型数字员工（模拟）
+        (r"/api/mock/news", MockNewsHandler),
+        (r"/api/mock/music", MockMusicHandler),
+        (r"/api/mock/movie", MockMovieHandler),
     ],
     **settings
     )
@@ -632,6 +642,63 @@ if __name__ == '__main__':
                 )
             )
             print("✓ 已创建示例数字员工：天气")
+
+            # @新闻（内置API型）
+            conn.execute(
+                """INSERT INTO digital_employees 
+                   (name, type, description, api_url, api_method, api_headers, api_params, api_response_template, sort_order, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "@新闻",
+                    "api",
+                    "返回近2天热门新闻（≥10条），含标题、来源、时间、摘要、链接",
+                    "http://localhost:10010/api/mock/news",
+                    "GET",
+                    json.dumps({}, ensure_ascii=False),
+                    json.dumps({}, ensure_ascii=False),
+                    "",
+                    3, 1
+                )
+            )
+            print("✓ 已创建示例数字员工：@新闻")
+
+            # @随机音乐（内置API型）
+            conn.execute(
+                """INSERT INTO digital_employees 
+                   (name, type, description, api_url, api_method, api_headers, api_params, api_response_template, sort_order, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "@随机音乐",
+                    "api",
+                    "随机推荐一首歌，含歌名、歌手、封面、播放链接",
+                    "http://localhost:10010/api/mock/music",
+                    "GET",
+                    json.dumps({}, ensure_ascii=False),
+                    json.dumps({}, ensure_ascii=False),
+                    "",
+                    4, 1
+                )
+            )
+            print("✓ 已创建示例数字员工：@随机音乐")
+
+            # @电影（内置API型）
+            conn.execute(
+                """INSERT INTO digital_employees 
+                   (name, type, description, api_url, api_method, api_headers, api_params, api_response_template, sort_order, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "@电影",
+                    "api",
+                    "搜索电影信息（导演、演员、简介、评分、年份、播放链接）；无关键词则随机推荐",
+                    "http://localhost:10010/api/mock/movie?keyword={query}",
+                    "GET",
+                    json.dumps({}, ensure_ascii=False),
+                    json.dumps({}, ensure_ascii=False),
+                    "",
+                    5, 1
+                )
+            )
+            print("✓ 已创建示例数字员工：@电影")
 
         # 迁移：更新已有天气数字员工的API配置（OpenWeatherMap → wttr.in）
         weather_emp = conn.execute("SELECT id, api_url FROM digital_employees WHERE name='天气'").fetchone()
