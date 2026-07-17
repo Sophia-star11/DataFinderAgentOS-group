@@ -4,7 +4,7 @@ import random
 import urllib.parse
 import time
 import tornado.web
-from app.controllers.base import BaseHandler
+from app.controllers.base import BaseHandler, check_ssrf
 from app.models.user import UserRepository
 from app.models.ai_model import AiModelRepository
 from app.models.digital_employee import DigitalEmployeeRepository
@@ -725,6 +725,14 @@ class UserChatApiHandler(BaseHandler):
             self.write(json.dumps({"success": False, "message": "模型API配置不完整（缺少API地址或密钥）"}))
             return
 
+        # SSRF防护：检查API地址是否指向内网
+        try:
+            check_ssrf(api_base)
+        except ValueError as e:
+            logger.warning(f"UserChat: SSRF拦截 api_base={api_base} - {e}")
+            self.write(json.dumps({"success": False, "message": f"API地址不合法: {e}"}))
+            return
+
         logger.info(f"UserChat: 开始调用LLM API model={model_name} stream=True")
 
         # 构建API请求
@@ -863,6 +871,11 @@ class UserChatApiHandler(BaseHandler):
 
         try:
             api_url = employee.get("api_url", "")
+            # SSRF防护
+            try:
+                check_ssrf(api_url)
+            except ValueError as e:
+                raise ValueError(f"API地址不合法: {e}")
             api_method = employee.get("api_method", "GET").upper()
             api_headers = json.loads(employee.get("api_headers", "{}") or "{}")
             api_params = json.loads(employee.get("api_params", "{}") or "{}")

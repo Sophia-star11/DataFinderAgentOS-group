@@ -2,9 +2,29 @@
 import json
 import logging
 import importlib
+import socket
 import urllib.parse
 
 logger = logging.getLogger("skill_executor")
+
+
+def _check_ssrf(url: str):
+    """SSRF防护：检查URL是否指向内网地址"""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"不支持的协议: {parsed.scheme}")
+    hostname = parsed.hostname or ""
+    try:
+        ip = socket.gethostbyname(hostname)
+    except Exception:
+        raise ValueError(f"无法解析主机名: {hostname}")
+    parts = ip.split(".")
+    if len(parts) != 4:
+        raise ValueError(f"非法IP: {ip}")
+    if parts[0] in ("127", "10") or (parts[0] == "172" and 16 <= int(parts[1]) <= 31) or (parts[0] == "192" and parts[1] == "168") or parts[0] == "0":
+        raise ValueError(f"禁止访问内网地址: {hostname} ({ip})")
+    if ip.startswith("169.254") or int(parts[0]) >= 224:
+        raise ValueError(f"禁止访问保留地址: {hostname} ({ip})")
 
 
 class SkillExecutor:
@@ -117,6 +137,7 @@ class SkillExecutor:
                     filled_params[k] = filled_params[k].replace(f"{{{p_key}}}", str(p_val))
 
         try:
+            _check_ssrf(filled_url)
             if method == "GET":
                 resp = requests.get(filled_url, headers=headers, params=filled_params, timeout=15)
             elif method == "POST":

@@ -3,7 +3,7 @@ import os
 import tornado.web
 import urllib.parse
 
-from app.controllers.base import AdminBaseHandler
+from app.controllers.base import AdminBaseHandler, check_ssrf
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.ai_model import AiModelRepository
 from app.models.skill import SkillRepository
@@ -299,6 +299,11 @@ class DigitalEmployeeTestApiHandler(AdminBaseHandler):
         if not api_base or not api_key:
             return {"success": False, "message": "关联模型的API配置不完整（缺少API地址或密钥）"}
 
+        try:
+            check_ssrf(api_base)
+        except ValueError as e:
+            return {"success": False, "message": f"API地址不合法: {e}"}
+
         url = f"{api_base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -372,6 +377,11 @@ class DigitalEmployeeTestApiHandler(AdminBaseHandler):
         api_url = employee.get("api_url", "")
         if not api_url:
             return {"success": False, "message": "API地址未配置"}
+
+        try:
+            check_ssrf(api_url)
+        except ValueError as e:
+            return {"success": False, "message": f"API地址不合法: {e}"}
 
         api_method = employee.get("api_method", "GET")
         api_headers = employee.get("api_headers", "{}")

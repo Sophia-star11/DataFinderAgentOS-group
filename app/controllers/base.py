@@ -1,9 +1,41 @@
+import socket
 import tornado.web
+import urllib.parse
 
 from app.models.user import UserRepository
 from app.models.menu import MenuRepository
 from app.models.function import FunctionRepository
 from app.models.db import get_connection
+
+
+def check_ssrf(url: str):
+    """SSRF防护：检查URL是否指向内网/保留地址，只允许HTTP/HTTPS"""
+    parsed = urllib.parse.urlparse(url)
+    scheme = parsed.scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"不支持的协议: {scheme}（只允许 http/https）")
+    hostname = parsed.hostname or ""
+    if not hostname:
+        raise ValueError("URL 缺少主机名")
+    try:
+        ip = socket.gethostbyname(hostname)
+    except Exception:
+        raise ValueError(f"无法解析主机名: {hostname}")
+    parts = ip.split(".")
+    if len(parts) != 4:
+        raise ValueError(f"非法 IP 地址: {ip}")
+    if parts[0] == "127" or parts[0] == "10":
+        raise ValueError(f"禁止访问内网地址: {hostname} ({ip})")
+    if parts[0] == "172" and 16 <= int(parts[1]) <= 31:
+        raise ValueError(f"禁止访问内网地址: {hostname} ({ip})")
+    if parts[0] == "192" and parts[1] == "168":
+        raise ValueError(f"禁止访问内网地址: {hostname} ({ip})")
+    if parts[0] == "0" or ip == "0.0.0.0":
+        raise ValueError(f"禁止访问保留地址: {hostname} ({ip})")
+    if ip.startswith("169.254"):
+        raise ValueError(f"禁止访问链路本地地址: {hostname} ({ip})")
+    if int(parts[0]) >= 224:
+        raise ValueError(f"禁止访问组播/广播地址: {hostname} ({ip})")
 
 
 class BaseHandler(tornado.web.RequestHandler):

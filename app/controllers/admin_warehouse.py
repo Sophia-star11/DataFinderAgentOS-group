@@ -2,7 +2,7 @@ import json
 import datetime
 import tornado.web
 
-from app.controllers.base import AdminBaseHandler
+from app.controllers.base import AdminBaseHandler, check_ssrf
 from app.models.data_warehouse import DataWarehouseRepository
 from app.models.deep_collect import DeepCollectRepository
 from app.models.digital_employee import DigitalEmployeeRepository
@@ -324,6 +324,11 @@ async def _call_llm(employee, warehouse_item, crawled_content=""):
     if not api_base or not api_key:
         return {"success": False, "message": "模型API配置不完整"}
 
+    try:
+        check_ssrf(api_base)
+    except ValueError as e:
+        return {"success": False, "message": f"API地址不合法: {e}"}
+
     system_prompt = employee.get("system_prompt", "") or "你是一个专业的数据采集分析专员，请对给定的数据进行深度分析。"
 
     title = warehouse_item.get("title", "")
@@ -379,6 +384,12 @@ async def _call_api_employee(employee, warehouse_item, crawled_content=""):
     api_url = employee.get("api_url", "")
     if not api_url:
         return {"success": False, "message": "API地址未配置"}
+
+    try:
+        check_ssrf(api_url)
+    except ValueError as e:
+        return {"success": False, "message": f"API地址不合法: {e}"}
+
     api_method = employee.get("api_method", "GET")
 
     try:

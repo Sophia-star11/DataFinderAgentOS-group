@@ -1,7 +1,7 @@
 import json
 import tornado.web
 
-from app.controllers.base import AdminBaseHandler
+from app.controllers.base import AdminBaseHandler, check_ssrf
 from app.models.ai_model import AiModelRepository
 
 
@@ -81,6 +81,13 @@ class ModelCreateApiHandler(AdminBaseHandler):
             self.write(json.dumps({"success": False, "message": "名称和模型ID不能为空"}))
             return
 
+        if api_base_url:
+            try:
+                check_ssrf(api_base_url)
+            except ValueError as e:
+                self.write(json.dumps({"success": False, "message": f"API地址不合法: {e}"}))
+                return
+
         if AiModelRepository.create(name, provider, model_name, api_base_url, api_key,
                                      max_tokens, category, system_prompt, temperature, top_p, context_length):
             self.write(json.dumps({"success": True, "message": "模型创建成功"}))
@@ -104,6 +111,13 @@ class ModelUpdateApiHandler(AdminBaseHandler):
                     updates[key] = float(val)
                 else:
                     updates[key] = val
+
+        if "api_base_url" in updates and updates["api_base_url"]:
+            try:
+                check_ssrf(updates["api_base_url"])
+            except ValueError as e:
+                self.write(json.dumps({"success": False, "message": f"API地址不合法: {e}"}))
+                return
 
         if AiModelRepository.update(int(model_id), **updates):
             self.write(json.dumps({"success": True, "message": "模型更新成功"}))
