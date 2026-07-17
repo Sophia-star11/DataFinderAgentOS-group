@@ -28,6 +28,10 @@ class UserListApiHandler(AdminBaseHandler):
         else: status = int(status)
         
         result = UserRepository.get_all_users(page, page_size, search, role_id, status)
+        # 脱敏：移除密码哈希和盐值
+        for item in result.get("data", []):
+            item.pop("password_hash", None)
+            item.pop("salt", None)
         self.write(json.dumps(result, ensure_ascii=False))
 
 class UserGetApiHandler(AdminBaseHandler):
@@ -42,6 +46,9 @@ class UserGetApiHandler(AdminBaseHandler):
         
         user = UserRepository.get_user_by_id(int(user_id))
         if user:
+            # 脱敏：移除密码哈希和盐值
+            user.pop("password_hash", None)
+            user.pop("salt", None)
             self.write(json.dumps({"success": True, "data": user}))
         else:
             self.set_status(404)

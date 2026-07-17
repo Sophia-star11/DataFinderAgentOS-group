@@ -24,6 +24,11 @@ class ModelListApiHandler(AdminBaseHandler):
         if not category:
             category = None
         result = AiModelRepository.get_all(page, page_size, search, category)
+        # 脱敏：掩码 api_key
+        for item in result.get("data", []):
+            if item.get("api_key"):
+                k = item["api_key"]
+                item["api_key"] = k[:4] + "****" + k[-4:] if len(k) > 8 else "****"
         self.write(json.dumps(result, ensure_ascii=False))
 
 
@@ -48,6 +53,10 @@ class ModelGetApiHandler(AdminBaseHandler):
             return
         model = AiModelRepository.get_by_id(int(model_id))
         if model:
+            # 脱敏：掩码 api_key
+            if model.get("api_key"):
+                k = model["api_key"]
+                model["api_key"] = k[:4] + "****" + k[-4:] if len(k) > 8 else "****"
             self.write(json.dumps({"success": True, "data": model}))
         else:
             self.write(json.dumps({"success": False, "message": "模型不存在"}))
@@ -127,6 +136,10 @@ class ModelGetDefaultApiHandler(AdminBaseHandler):
     def get(self):
         model = AiModelRepository.get_default()
         if model:
+            # 脱敏：掩码 api_key
+            if model.get("api_key"):
+                k = model["api_key"]
+                model["api_key"] = k[:4] + "****" + k[-4:] if len(k) > 8 else "****"
             self.write(json.dumps({"success": True, "data": model}))
         else:
             self.write(json.dumps({"success": False, "message": "未设置默认模型"}))

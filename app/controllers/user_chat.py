@@ -94,12 +94,6 @@ class UserDigitalEmployeesApiHandler(BaseHandler):
                 "type": e["type"],
                 "description": e["description"],
                 "model_id": e["model_id"],
-                "system_prompt": e.get("system_prompt", ""),
-                "api_url": e.get("api_url", ""),
-                "api_method": e.get("api_method", "GET"),
-                "api_headers": e.get("api_headers", "{}"),
-                "api_params": e.get("api_params", "{}"),
-                "api_response_template": e.get("api_response_template", ""),
                 "card_config": e.get("card_config", ""),
                 "status": e["status"]
             })

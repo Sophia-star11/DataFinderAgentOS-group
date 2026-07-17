@@ -1,11 +1,11 @@
 import json
 import tornado.web
 
-from app.controllers.base import BaseHandler
+from app.controllers.base import AdminBaseHandler
 from app.config import config
 
 
-class SettingsManagementHandler(BaseHandler):
+class SettingsManagementHandler(AdminBaseHandler):
     """系统设置页面"""
     @tornado.web.authenticated
     def get(self):
@@ -22,7 +22,7 @@ class SettingsManagementHandler(BaseHandler):
         self.render("admin/settings.html", title="系统设置", username=self.current_user, settings=settings)
 
 
-class SettingsApiHandler(BaseHandler):
+class SettingsApiHandler(AdminBaseHandler):
     """系统设置API"""
     @tornado.web.authenticated
     def get(self):

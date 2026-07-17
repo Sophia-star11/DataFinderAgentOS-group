@@ -43,3 +43,25 @@ class Config:
 
 
 config = Config()
+
+# ---- 启动时安全警告 ----
+import logging as _warn_log
+_warn = _warn_log.getLogger("security")
+
+if config.COOKIE_SECRET == "datafinderagentos-token":
+    _warn.warning(
+        "⚠️  COOKIE_SECRET 使用了默认值，会话可被伪造！"
+        "请在环境变量或 .env 中设置一个随机长字符串（≥32位）。"
+    )
+
+if config.DEFAULT_ADMIN_PASSWORD == "123456":
+    _warn.warning(
+        "⚠️  DEFAULT_ADMIN_PASSWORD 使用了默认值 123456，"
+        "请尽快在环境变量中修改管理员密码。"
+    )
+
+if not config.ENCRYPTION_KEY:
+    _warn.warning(
+        "⚠️  ENCRYPTION_KEY 未设置，API密钥将以明文形式存储！"
+        "请在环境变量中设置 ENCRYPTION_KEY。"
+    )
