@@ -4,7 +4,7 @@
 .layui-body {
     top: 60px;
     left: 220px;
-    background: #f0f4f8;
+    background: #0a1628;
     padding: 0;
     overflow: hidden;
 }
@@ -15,26 +15,26 @@
     grid-template-columns: 300px 1fr 380px;
     gap: 20px;
     padding: 20px 24px;
-    background: #f0f4f8;
+    background: #0a1628;
 }
 .chart-panel {
-    background: linear-gradient(135deg, #ffffff, #f8fafc);
-    border: 1px solid rgba(226,232,240,.5);
+    background: linear-gradient(180deg, #0f1f3a 0%, #0a1628 100%);
+    border: 1px solid rgba(56, 189, 248, 0.12);
     border-radius: 10px;
     padding: 20px;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    box-shadow: 0 1px 2px rgba(0,0,0,.03), 0 4px 12px rgba(59,130,246,.06);
+    box-shadow: 0 1px 2px rgba(0,0,0,.2), 0 4px 12px rgba(56,189,248,.04);
     transition: transform .2s ease, box-shadow .2s ease;
 }
 .chart-panel:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 30px rgba(0,0,0,.08), 0 4px 15px rgba(59,130,246,.1);
+    box-shadow: 0 12px 30px rgba(0,0,0,.3), 0 4px 15px rgba(56,189,248,.08);
 }
 .chart-panel .panel-title {
     font-size: 14px;
-    color: #475569;
+    color: #94a3b8;
     margin-bottom: 12px;
     padding-left: 4px;
     font-weight: 600;
@@ -113,7 +113,7 @@
         <div class="screen-main">
             <div class="left-col">
                 <div class="chart-panel">
-                    <div class="panel-title"><i class="layui-icon" style="color:#f97316;">&#xe64a;</i> 数据来源分布</div>
+                    <div class="panel-title"><i class="layui-icon" style="color:#f97316;">&#xe64a;</i> 数据状态分布</div>
                     <div class="chart-body" id="chart-source-pie"></div>
                 </div>
                 <div class="chart-panel">
@@ -123,8 +123,8 @@
             </div>
             <div class="center-col">
                 <div class="chart-panel">
-                    <div class="panel-title"><i class="layui-icon" style="color:#60a5fa;">&#xe63c;</i> 数据流水线</div>
-                    <div class="chart-body" id="chart-sankey"></div>
+                    <div class="panel-title"><i class="layui-icon" style="color:#60a5fa;">&#xe63c;</i> 数据源星球</div>
+                    <div class="chart-body" id="chart-globe"></div>
                 </div>
             </div>
             <div class="right-col">
@@ -147,11 +147,12 @@
 {% block script %}
     <script src="{{ static_url('dist/echarts/echarts.min.js') }}"></script>
     <script src="{{ static_url('dist/echarts/echarts-wordcloud.min.js') }}"></script>
+    <script src="{{ static_url('dist/echarts/echarts-gl.min.js') }}"></script>
 <script>
 // ====== 初始化图表 ======
 var pieChart = echarts.init(document.getElementById('chart-source-pie'));
 var wcChart = echarts.init(document.getElementById('chart-wordcloud'));
-var sankeyChart = echarts.init(document.getElementById('chart-sankey'));
+var globeChart = echarts.init(document.getElementById('chart-globe'));
 var trendChart = echarts.init(document.getElementById('chart-trend'));
 
 var GC = [
@@ -164,7 +165,7 @@ var GC = [
     new echarts.graphic.LinearGradient(0,0,1,1,[{offset:0,color:'#ec4899'},{offset:1,color:'#db2777'}])
 ];
 window.addEventListener('resize', function() {
-    pieChart.resize(); wcChart.resize(); sankeyChart.resize(); trendChart.resize();
+    pieChart.resize(); wcChart.resize(); globeChart.resize(); trendChart.resize();
 });
 
 // ====== 数据加载 ======
@@ -183,42 +184,99 @@ function loadAll() {
         });
     });
 
-    // 来源分布
-    fetch('/api/data-screen/source').then(function(r){return r.json()}).then(function(res){
+    // 状态分布
+    fetch('/api/data-screen/status').then(function(r){return r.json()}).then(function(res){
         if (!res.success || !res.data || !res.data.length) return;
+        var stColors = {'普通采集':'#3b82f6','深度采集':'#22c55e','未采集':'#f97316'};
         pieChart.setOption({
             backgroundColor: 'transparent',
             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-            legend: { bottom: 0, textStyle: { color: '#64748b', fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
+            legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 10 }, itemWidth: 10, itemHeight: 10 },
             series: [{
                 type: 'pie', radius: ['30%', '55%'], center: ['50%', '48%'],
                 itemStyle: { borderRadius: 4 },
-                label: { color: '#475569', fontSize: 11 },
-                data: res.data.map(function(d,i){ return Object.assign({}, d, {itemStyle:{color:GC[i%GC.length]}}); })
+                label: { color: '#cbd5e1', fontSize: 11 },
+                data: res.data.map(function(d){ return {name:d.name, value:d.value, itemStyle:{color:stColors[d.name]||'#60a5fa'}}; })
             }]
         });
     });
 
-    // 桑基图 - 数据流水线
-    fetch('/api/data-screen/sankey').then(function(r){return r.json()}).then(function(res){
+    // 3D球体 - 数据源星球
+    fetch('/api/data-screen/globe').then(function(r){return r.json()}).then(function(res){
         if (!res.success || !res.data.nodes || !res.data.nodes.length) return;
-        sinkColors = {
-            '数据仓库':'#3b82f6','已深度采集':'#22c55e','未深度采集':'#94a3b8',
-            '任务已完成':'#22c55e','任务运行中':'#3b82f6','任务待处理':'#f97316','任务失败':'#ef4444'
-        };
-        sankeyChart.setOption({
+        var nodes = res.data.nodes;
+        var n = nodes.length;
+        var goldenRatio = (1 + Math.sqrt(5)) / 2;
+        var radius = 80;
+        var pts = [];
+        for (var i = 0; i < n; i++) {
+            var theta = 2 * Math.PI * i / goldenRatio;
+            var phi = Math.acos(1 - 2 * (i + 0.5) / n);
+            pts.push([
+                radius * Math.sin(phi) * Math.cos(theta),
+                radius * Math.sin(phi) * Math.sin(theta),
+                radius * Math.cos(phi)
+            ]);
+        }
+        var maxVal = 1;
+        for (var i = 0; i < n; i++) { if (nodes[i].value > maxVal) maxVal = nodes[i].value; }
+        var scatterData = nodes.map(function(d, i){
+            return {name: d.name, value: [pts[i][0], pts[i][1], pts[i][2], d.value]};
+        });
+        var lineData = [];
+        for (var i = 0; i < n; i++) {
+            lineData.push({
+                coords: [[pts[i][0], pts[i][1], pts[i][2]], [0, 0, 0]],
+                lineStyle: { width: 0.8 * (0.3 + 0.7 * nodes[i].value / maxVal) }
+            });
+        }
+        globeChart.setOption({
             backgroundColor: 'transparent',
-            tooltip: { trigger: 'item', formatter: function(p){var d=p.data;return d.source!=null?d.source+' → '+d.target+': '+d.value:d.name;} },
+            tooltip: { trigger: 'item', formatter: function(p){return (p.name||'')+'<br/>数据量: <b>'+(p.value?p.value[3]:0)+'</b>';} },
+            globe: {
+                baseColor: '#1a365d',
+                shading: 'realistic',
+                realisticMaterial: { roughness: 0.4, metalness: 0.1 },
+                atmosphere: { show: true, offset: 6, color: '#38bdf8', intensity: 0.3 },
+                light: {
+                    main: { intensity: 0.8, alpha: 40, beta: 200 },
+                    ambient: { intensity: 0.3 }
+                },
+                viewControl: {
+                    autoRotate: true, autoRotateSpeed: 0.8,
+                    distance: 200, minDistance: 100, maxDistance: 400,
+                    beta: 15
+                },
+                postEffect: { enable: true, bloom: { enable: true, intensity: 0.2 } }
+            },
             series: [{
-                type: 'sankey', layout:'none', draggable:false,
-                nodeWidth: 18, nodeGap: 30, layoutIterations: 0,
-                label: { color:'#475569', fontSize: 11 },
-                lineStyle: { color: 'gradient', curveness: 0.5, width: 2 },
-                emphasis: { lineStyle: { opacity: 0.6 } },
-                data: res.data.nodes.map(function(n){
-                    return {name:n.name, itemStyle:{color:sinkColors[n.name]||'#60a5fa'}};
-                }),
-                links: res.data.links
+                type: 'scatter3D',
+                coordinateSystem: 'globe',
+                data: scatterData,
+                symbol: 'circle',
+                symbolSize: function(d){var v = d.value ? d.value[3] : 0; return 8 + 28 * v / maxVal;},
+                itemStyle: {
+                    color: function(d){
+                        var c = ['#38bdf8','#22d3ee','#60a5fa','#2dd4bf','#34d399','#67e8f9','#06b6d4','#0891b2'];
+                        return c[d.dataIndex % c.length];
+                    },
+                    opacity: 0.95, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)'
+                },
+                label: {
+                    show: true, formatter: function(p){return p.name;},
+                    color: '#e2e8f0', fontSize: 11, fontWeight: 'bold',
+                    textShadowColor: 'rgba(0,0,0,0.8)', textShadowBlur: 4,
+                    position: 'right', distance: 5
+                }
+            }, {
+                type: 'lines3D',
+                coordinateSystem: 'globe',
+                data: lineData,
+                lineStyle: {
+                    color: 'rgba(56, 189, 248, 0.3)',
+                    width: 1, curveness: 0.2, opacity: 0.3
+                },
+                blendMode: 'lighter'
             }]
         });
     });
@@ -230,8 +288,8 @@ function loadAll() {
             backgroundColor: 'transparent',
             tooltip: { trigger: 'axis' },
             grid: { left: 45, right: 20, bottom: 55, top: 15 },
-            xAxis: { type: 'category', data: res.data.map(function(x){return x.date;}), axisLabel: { color:'#64748b', fontSize:10, rotate:30, margin:8 } },
-            yAxis: { type: 'value', minInterval: 1, axisLabel: { color:'#64748b', fontSize:10 }, splitLine: { lineStyle: { color:'rgba(148,163,184,.3)' } } },
+            xAxis: { type: 'category', data: res.data.map(function(x){return x.date;}), axisLabel: { color:'#94a3b8', fontSize:10, rotate:30, margin:8 } },
+            yAxis: { type: 'value', minInterval: 1, axisLabel: { color:'#94a3b8', fontSize:10 }, splitLine: { lineStyle: { color:'rgba(148,163,184,.15)' } } },
             series: [{
                 type: 'line', smooth: true, data: res.data.map(function(x){return x.count;}),
                 lineStyle: { width: 2, color: '#22c55e' },

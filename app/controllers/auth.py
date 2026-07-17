@@ -78,7 +78,7 @@ class AdminLoginHandler(BaseHandler):
             return self.render("admin/login.html",title="后台登录",error="用户名或密码错误")
         
         user = UserRepository.get_user_by_username(username)
-        if not user or user.get("role_code") != "admin":
+        if not user or dict(user).get("role_code") != "admin":
             self.set_status(403)
             return self.render("admin/login.html",title="后台登录",error="无管理员权限")
         

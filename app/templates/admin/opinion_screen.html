@@ -293,16 +293,20 @@
                         <span style="float:right;display:flex;align-items:center;gap:6px;">
                             <span style="color:#64748b;font-size:11px;" id="warn-count-label"></span>
                             <span style="color:#22c55e;font-size:11px;" id="scan-msg"></span>
-                            <button class="layui-btn layui-btn-xs" onclick="openWordModal()"><i class="layui-icon layui-icon-edit"></i> 管理</button>
-                            <button class="layui-btn layui-btn-xs layui-btn-normal" onclick="batchReview()" id="review-btn"><i class="layui-icon layui-icon-ok-circle"></i> 审核</button>
-                            <button class="layui-btn layui-btn-xs layui-btn-warm" onclick="triggerScan()" id="scan-btn"><i class="layui-icon layui-icon-util"></i> 扫描</button>
+                            <button class="layui-btn layui-btn-xs layui-btn-warm" onclick="batchReview()" id="review-btn"><i class="layui-icon layui-icon-ok-circle"></i> 批量审核</button>
+                            <button class="layui-btn layui-btn-xs layui-btn-danger" onclick="reReview()" id="re-review-btn"><i class="layui-icon layui-icon-refresh-3"></i> 重新审核</button>
+                            <button class="layui-btn layui-btn-xs layui-btn-normal" onclick="triggerScan()" id="scan-btn"><i class="layui-icon layui-icon-util"></i> 扫描</button>
+                            <span style="color:#d1d5db;">|</span>
+                            <button class="layui-btn layui-btn-xs layui-btn-primary" onclick="deleteSelected()" id="btn-batch-del" style="border:1px solid #ef4444;color:#ef4444;display:none;"><i class="layui-icon layui-icon-delete"></i> 批量删除</button>
+                            <button class="layui-btn layui-btn-xs" onclick="openWordModal()"><i class="layui-icon layui-icon-edit"></i> 敏感词</button>
                         </span>
                     </div>
                     <div class="warn-table-wrap" id="warn-table-wrap">
                         <table class="warn-table">
                             <thead>
                                 <tr>
-                                    <th style="width:68px;">时间</th>
+                                    <th style="width:30px;"><input type="checkbox" id="cb-toggle-all" onchange="toggleAll(this.checked)" style="cursor:pointer;"></th>
+                                    <th style="width:64px;">时间</th>
                                     <th style="width:52px;">来源</th>
                                     <th style="width:70px;">匹配词</th>
                                     <th style="width:44px;">级别</th>
@@ -347,6 +351,7 @@
                                 <option value="high">高危</option>
                                 <option value="medium">中危</option>
                                 <option value="low">低危</option>
+                                <option value="harmless">无害</option>
                             </select>
                             <button class="tool-btn" id="btn-change-severity" onclick="toggleEditSeverity()" style="margin-left:4px;"><i class="layui-icon">&#xe642;</i> 更改</button>
                             <button class="tool-btn" id="btn-save-severity" onclick="changeSeverity()" style="display:none;margin-left:4px;color:#22c55e;"><i class="layui-icon">&#xe618;</i> 保存</button>
@@ -358,7 +363,7 @@
                         <button class="layui-btn layui-btn-sm layui-btn-normal" id="btn-mark-read" onclick="markRead()"><i class="layui-icon">&#xe642;</i> 标为已读</button>
                         <button class="layui-btn layui-btn-sm" id="btn-ack-feedback" onclick="ackWithFeedback()"><i class="layui-icon">&#xe618;</i> 确认反馈</button>
                         <button class="layui-btn layui-btn-sm layui-btn-warm" onclick="markFalsePositive()"><i class="layui-icon">&#xe640;</i> 误报</button>
-                        <a class="layui-btn layui-btn-sm" id="btn-view-conversation" target="_blank" style="display:none;"><i class="layui-icon">&#xe60a;</i> 查看对话</a>
+                        <button class="layui-btn layui-btn-sm" onclick="viewConversation()" id="btn-view-conversation" style="display:none;"><i class="layui-icon">&#xe60a;</i> 查看对话</button>
                         <input type="text" class="feedback-input" id="feedback-input" placeholder="输入反馈意见（选填）" style="width:160px;display:none;" />
                     </div>
                 </div>
@@ -410,6 +415,19 @@
     </div>
 </div>
 
+<div id="conv-modal-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;justify-content:center;align-items:center;" onclick="if(event.target===this)closeConvModal()">
+    <div style="background:#fff;border-radius:12px;width:700px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.12);">
+        <div style="padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:#1e293b;font-size:16px;font-weight:600;"><i class="layui-icon" style="color:#3b82f6;">&#xe60a;</i> 对话内容</span>
+            <span onclick="closeConvModal()" style="cursor:pointer;color:#94a3b8;font-size:18px;line-height:1;">&times;</span>
+        </div>
+        <div id="conv-modal-body" style="flex:1;overflow-y:auto;padding:16px 18px;font-size:13px;color:#334155;line-height:1.6;"></div>
+        <div style="padding:10px 18px;border-top:1px solid #e2e8f0;text-align:right;">
+            <button class="layui-btn layui-btn-xs" onclick="closeConvModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
 {% include "profile_modals.html" %}
 {% end %}
 
@@ -449,6 +467,7 @@ function severityBadge(s) {
     if (s === 'high' || s === '高危') { cls = 'badge-high'; label = '高危'; }
     else if (s === 'medium' || s === '中危') { cls = 'badge-medium'; label = '中危'; }
     else if (s === 'pending') { cls = 'badge-medium'; label = '待审'; }
+    else if (s === 'harmless') { cls = 'badge-low'; label = '无害'; }
     return '<span class="badge '+cls+'">'+label+'</span>';
 }
 
@@ -521,7 +540,6 @@ function selectWarn(id) {
     var convBtn = document.getElementById('btn-view-conversation');
     if (item.source_type === 'user_chat' && item.source_id) {
         convBtn.style.display = '';
-        convBtn.href = '/admin/conversation-management';
     } else {
         convBtn.style.display = 'none';
     }
@@ -583,7 +601,8 @@ function loadAll() {
                 var html = '';
         for (var i=0;i<res.data.length;i++) {
             var d = res.data[i];
-            html += '<tr data-id="'+d.id+'" onclick="selectWarn('+d.id+')">'+
+            html += '<tr data-id="'+d.id+'" onclick="if(event.target.type!==\'checkbox\')selectWarn('+d.id+')">'+
+                '<td><input type="checkbox" class="cb-warn" value="'+d.id+'" onchange="updateBatchDelBtn()" style="cursor:pointer;"></td>'+
                 '<td>'+formatTime(d.created_at||d.time)+'</td>'+
                 '<td>'+(d.source_type==='user_chat'?'用户对话':d.source_type==='data_warehouse'?'采集数据':d.source_type||'--')+'</td>'+
                 '<td>'+escHtml(d.matched_word||'--')+'</td>'+
@@ -655,7 +674,7 @@ function ackWithFeedback() {
 
 function markFalsePositive() {
     if (!selectedWarnId) return;
-    if (!confirm('确认将该预警标记为误报并移除？')) return;
+    if (!confirm('确认将该预警标记为误报？')) return;
     postJSON('/api/opinion/acknowledge', {id:selectedWarnId, action:'false_positive'})
     .then(function(r){return r.json()}).then(function(res){
         if (res.success) { document.getElementById('detail-card').style.display = 'none'; loadAll(); }
@@ -832,12 +851,117 @@ function batchReview() {
     .then(function(r){return r.json()}).then(function(res){
         if (res.success) {
             loadAll();
-            var msg = res.data.reviewed ? '已完成 '+res.data.reviewed+' 条审核' : '无需审核';
+            var total = res.data.total || 0;
+            var reviewed = res.data.reviewed || 0;
+            var remaining = res.data.remaining || 0;
+            var msg;
+            if (reviewed > 0) {
+                msg = '已完成 '+reviewed+'/'+total+' 条审核';
+            } else if (total > 0 && reviewed === 0) {
+                msg = '无需审核（全部已完成）';
+            } else {
+                msg = '暂无待审核预警';
+            }
             document.getElementById('scan-msg').textContent = msg;
             setTimeout(function(){ document.getElementById('scan-msg').textContent = ''; }, 3000);
         } else { alert(res.message || '审核失败'); }
     }).catch(function(){alert('请求失败');}).finally(function(){
         btn.disabled = false; btn.innerHTML = '<i class="layui-icon">&#xe667;</i> AI批量审核';
+    });
+}
+
+function reReview() {
+    var btn = document.getElementById('re-review-btn');
+    if (!confirm('重新审核将对所有预警重新进行AI分析，确认继续？')) return;
+    btn.disabled = true; btn.innerHTML = '<i class="layui-icon">&#xe63d;</i> 重新审核中...';
+    postJSON('/api/opinion/batch-review', { force: true })
+    .then(function(r){return r.json()}).then(function(res){
+        if (res.success) {
+            loadAll();
+            var total = res.data.total || 0;
+            var reviewed = res.data.reviewed || 0;
+            var msg = '已完成 '+reviewed+'/'+total+' 条重新审核';
+            document.getElementById('scan-msg').textContent = msg;
+            setTimeout(function(){ document.getElementById('scan-msg').textContent = ''; }, 3000);
+        } else { alert(res.message || '重新审核失败'); }
+    }).catch(function(){alert('请求失败');}).finally(function(){
+        btn.disabled = false; btn.innerHTML = '<i class="layui-icon layui-icon-refresh-3"></i> 重新审核';
+    });
+}
+
+function viewConversation() {
+    if (!selectedWarnId) return;
+    var item = warnData.find(function(w){ return w.id == selectedWarnId; });
+    if (!item || !item.source_id || item.source_type !== 'user_chat') {
+        closeConvModal();
+        return;
+    }
+    document.getElementById('conv-modal-body').innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate" style="font-size:24px;"></i> 加载中...</div>';
+    document.getElementById('conv-modal-overlay').style.display = 'flex';
+    fetch('/api/admin/conversations/messages?id=' + item.source_id)
+    .then(function(r){return r.json()}).then(function(res){
+        if (!res.success || !res.data) {
+            document.getElementById('conv-modal-body').innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;">无法加载对话内容</div>';
+            return;
+        }
+        var msgs = res.data.messages || [];
+        if (!msgs.length) {
+            document.getElementById('conv-modal-body').innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;">该对话无消息</div>';
+            return;
+        }
+        var html = '';
+        for (var i=0;i<msgs.length;i++) {
+            var m = msgs[i];
+            var isUser = m.role === 'user' || m.role === 'User';
+            var align = isUser ? 'left' : 'right';
+            var bg = isUser ? '#f1f5f9' : '#3b82f6';
+            var color = isUser ? '#334155' : '#fff';
+            html += '<div style="display:flex;justify-content:'+align+';margin-bottom:10px;">'+
+                '<div style="max-width:75%;background:'+bg+';color:'+color+';border-radius:8px;padding:8px 12px;font-size:13px;word-break:break-word;white-space:pre-wrap;">'+
+                escHtml(m.content||'')+
+                '</div></div>';
+        }
+        document.getElementById('conv-modal-body').innerHTML = html;
+    }).catch(function(){
+        document.getElementById('conv-modal-body').innerHTML = '<div style="text-align:center;padding:30px;color:#94a3b8;">请求失败</div>';
+    });
+}
+
+function closeConvModal() {
+    document.getElementById('conv-modal-overlay').style.display = 'none';
+}
+
+function toggleAll(checked) {
+    var cbs = document.querySelectorAll('.cb-warn');
+    for (var i=0;i<cbs.length;i++) cbs[i].checked = checked;
+    updateBatchDelBtn();
+}
+
+function updateBatchDelBtn() {
+    var checked = document.querySelectorAll('.cb-warn:checked');
+    var btn = document.getElementById('btn-batch-del');
+    btn.style.display = checked.length ? '' : 'none';
+    btn.innerHTML = '<i class="layui-icon layui-icon-delete"></i> 批量删除('+checked.length+')';
+}
+
+function deleteSelected() {
+    var checked = document.querySelectorAll('.cb-warn:checked');
+    var ids = [];
+    for (var i=0;i<checked.length;i++) ids.push(parseInt(checked[i].value));
+    if (!ids.length) return;
+    if (!confirm('确认删除选中的 '+ids.length+' 条预警？')) return;
+    var btn = document.getElementById('btn-batch-del');
+    btn.disabled = true; btn.innerHTML = '<i class="layui-icon layui-icon-loading"></i> 删除中...';
+    postJSON('/api/opinion/batch-delete', {ids: ids})
+    .then(function(r){return r.json()}).then(function(res){
+        if (res.success) {
+            document.getElementById('cb-toggle-all').checked = false;
+            loadAll();
+            document.getElementById('scan-msg').textContent = '已删除 '+res.deleted+' 条';
+            setTimeout(function(){ document.getElementById('scan-msg').textContent = ''; }, 3000);
+        } else { alert(res.message || '删除失败'); }
+    }).catch(function(){alert('请求失败');}).finally(function(){
+        btn.disabled = false; updateBatchDelBtn();
     });
 }
 

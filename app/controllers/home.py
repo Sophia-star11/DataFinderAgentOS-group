@@ -63,7 +63,7 @@ LLM_REVIEW_PROMPT = """你是一个安全审核专家，任务是对系统匹配
 输出: {{"classification": "false_positive", "reason": "用户正常提问管理操作，无越权意图", "risk_score": 8}}"""
 
 
-def llm_classify_warning(source_content, matched_word, category):
+def llm_classify_warning(source_content, matched_word, category, source_type="user_chat"):
     """调用默认大模型对命中敏感词的内容做二次判定，返回分类结果"""
     try:
         model = AiModelRepository.get_default()
@@ -81,6 +81,7 @@ def llm_classify_warning(source_content, matched_word, category):
         prompt = LLM_REVIEW_PROMPT.format(
             matched_word=esc(matched_word),
             category=esc(category),
+            source_type=esc(source_type),
             source_content=esc((source_content or "")[:500])
         )
 
@@ -110,24 +111,31 @@ def llm_classify_warning(source_content, matched_word, category):
         return {"classification": "suspicious", "reason": "模型调用异常，保留预警", "risk_score": 50}
 
 
-async def batch_review_pending_warnings():
-    """后台批量审核所有待审预警（risk_analysis IS NULL）"""
+async def batch_review_pending_warnings(force=False):
+    """后台批量审核所有待审预警（risk_analysis IS NULL），返回处理条数"""
+    processed = 0
     try:
         with get_connection() as conn:
+            if force:
+                conn.execute("UPDATE public_opinion_warnings SET risk_analysis=NULL, risk_score=0, severity='pending' WHERE risk_analysis IS NOT NULL")
+                conn.commit()
             rows = conn.execute(
-                "SELECT id, source_content, matched_word, word_category FROM public_opinion_warnings WHERE risk_analysis IS NULL"
+                "SELECT id, source_content, matched_word, word_category, source_type FROM public_opinion_warnings WHERE risk_analysis IS NULL"
             ).fetchall()
 
             for row in rows:
                 result = llm_classify_warning(
-                    row["source_content"], row["matched_word"], row["word_category"]
+                    row["source_content"], row["matched_word"], row["word_category"], row["source_type"] or "user_chat"
                 )
                 cls = result.get("classification", "suspicious")
                 reason = result.get("reason", "")
                 score = result.get("risk_score", 50)
 
                 if cls == "false_positive":
-                    conn.execute("DELETE FROM public_opinion_warnings WHERE id=?", (row["id"],))
+                    conn.execute(
+                        "UPDATE public_opinion_warnings SET risk_analysis=?, risk_score=?, severity=?, status=? WHERE id=?",
+                        (f"【AI审核-误报】{reason}", 0, "harmless", "read", row["id"])
+                    )
                 else:
                     final_severity = "high" if cls == "real_attack" else "medium"
                     analysis = f"【AI审核{'(模型复核)' if cls == 'suspicious' else ''}】{reason}"
@@ -135,9 +143,11 @@ async def batch_review_pending_warnings():
                         "UPDATE public_opinion_warnings SET risk_analysis=?, risk_score=?, severity=? WHERE id=?",
                         (analysis, score, final_severity, row["id"])
                     )
+                processed += 1
             conn.commit()
     except Exception:
         pass
+    return processed
 
 
 class IndexHandler(BaseHandler):
@@ -306,6 +316,50 @@ class DataScreenSankeyApiHandler(AdminBaseHandler):
             self.write(json.dumps({"success": True, "data": {"nodes": [], "links": []}}))
 
 
+class DataScreenGlobeApiHandler(AdminBaseHandler):
+    """数智大屏3D球体数据 — 数据源节点"""
+    @tornado.web.authenticated
+    def get(self):
+        try:
+            with get_connection() as conn:
+                rows = conn.execute("""
+                    SELECT COALESCE(NULLIF(source_name,''), '未知来源') as name, COUNT(*) as value
+                    FROM data_warehouse GROUP BY source_name ORDER BY value DESC LIMIT 20
+                """).fetchall()
+                total = conn.execute("SELECT COUNT(*) FROM data_warehouse").fetchone()[0] or 0
+                deep = conn.execute("SELECT COUNT(*) FROM data_warehouse WHERE is_deep_collected=1").fetchone()[0] or 0
+                nodes = []
+                for r in rows:
+                    nodes.append({
+                        "name": r["name"],
+                        "value": r["value"],
+                        "category": "数据源"
+                    })
+            self.write(json.dumps({"success": True, "data": {"nodes": nodes, "total": total, "deep": deep}}))
+        except Exception as e:
+            self.write(json.dumps({"success": True, "data": {"nodes": [], "total": 0, "deep": 0}}))
+
+
+class DataScreenStatusApiHandler(AdminBaseHandler):
+    """数智大屏数据状态分布 — 普通采集/深度采集/监控源"""
+    @tornado.web.authenticated
+    def get(self):
+        try:
+            with get_connection() as conn:
+                total = conn.execute("SELECT COUNT(*) FROM data_warehouse").fetchone()[0] or 0
+                deep = conn.execute("SELECT COUNT(*) FROM data_warehouse WHERE is_deep_collected=1").fetchone()[0] or 0
+                sources = conn.execute("SELECT COUNT(*) FROM watch_sources").fetchone()[0] or 0
+            normal = total - deep
+            data = [
+                {"name": "普通采集", "value": normal},
+                {"name": "深度采集", "value": deep},
+                {"name": "未采集", "value": sources}
+            ]
+            self.write(json.dumps({"success": True, "data": data}))
+        except Exception:
+            self.write(json.dumps({"success": True, "data": []}))
+
+
 class OpinionScreenHandler(AdminBaseHandler):
     """舆情大屏页面"""
     @tornado.web.authenticated
@@ -409,16 +463,21 @@ class OpinionAIAnalyzeApiHandler(AdminBaseHandler):
                 content = row["source_content"] or ""
                 word = row["matched_word"]
                 category = row["word_category"]
+                source_type = row["source_type"] or "user_chat"
 
-                result = llm_classify_warning(content, word, category)
+                result = llm_classify_warning(content, word, category, source_type)
                 cls = result.get("classification", "suspicious")
                 reason = result.get("reason", "")
                 score = result.get("risk_score", 50)
 
                 if cls == "false_positive":
-                    conn.execute("DELETE FROM public_opinion_warnings WHERE id=?", (warning_id,))
+                    analysis = f"【AI审核-误报】{reason}"
+                    conn.execute(
+                        "UPDATE public_opinion_warnings SET risk_analysis=?, risk_score=?, severity=?, status=? WHERE id=?",
+                        (analysis, 0, "harmless", "read", warning_id)
+                    )
                     conn.commit()
-                    self.write(json.dumps({"success": True, "data": {"deleted": True, "reason": reason}}))
+                    self.write(json.dumps({"success": True, "data": {"risk_analysis": analysis, "risk_score": 0, "severity": "harmless"}}))
                     return
 
                 final_severity = "high" if cls == "real_attack" else "medium"
@@ -450,7 +509,10 @@ class OpinionAcknowledgeApiHandler(AdminBaseHandler):
 
             with get_connection() as conn:
                 if body.get("action") == "false_positive":
-                    conn.execute("DELETE FROM public_opinion_warnings WHERE id=?", (warning_id,))
+                    conn.execute(
+                        "UPDATE public_opinion_warnings SET risk_analysis=?, risk_score=?, severity=?, status=? WHERE id=?",
+                        ("【人工标记-误报】", 0, "harmless", "read", warning_id)
+                    )
                     conn.commit()
                     self.write(json.dumps({"success": True}))
                     return
@@ -600,25 +662,40 @@ class OpinionBatchReviewApiHandler(AdminBaseHandler):
     @tornado.web.authenticated
     async def post(self):
         try:
-            before = 0
+            body = tornado.escape.json_decode(self.request.body) if self.request.body else {}
+            force = body.get("force", False)
+
+            reviewed = await batch_review_pending_warnings(force=force)
+
             with get_connection() as conn:
-                before = conn.execute(
+                remaining = conn.execute(
                     "SELECT COUNT(*) FROM public_opinion_warnings WHERE risk_analysis IS NULL"
                 ).fetchone()[0] or 0
 
-            await batch_review_pending_warnings()
-
-            after = 0
-            with get_connection() as conn:
-                after = conn.execute(
-                    "SELECT COUNT(*) FROM public_opinion_warnings WHERE risk_analysis IS NULL"
-                ).fetchone()[0] or 0
-
-            reviewed = before - after
+            total = reviewed + remaining
             self.write(json.dumps({
                 "success": True,
-                "data": {"total": before, "reviewed": reviewed, "remaining": after}
+                "data": {"total": total, "reviewed": reviewed, "remaining": remaining}
             }))
+        except Exception as e:
+            self.write(json.dumps({"success": False, "message": str(e)}))
+
+
+class OpinionBatchDeleteApiHandler(AdminBaseHandler):
+    """批量删除预警"""
+    @tornado.web.authenticated
+    def post(self):
+        try:
+            body = json.loads(self.request.body)
+            ids = body.get("ids", [])
+            if not ids:
+                self.write(json.dumps({"success": False, "message": "缺少ids参数"}))
+                return
+            placeholders = ",".join(["?"] * len(ids))
+            with get_connection() as conn:
+                conn.execute(f"DELETE FROM public_opinion_warnings WHERE id IN ({placeholders})", ids)
+                conn.commit()
+            self.write(json.dumps({"success": True, "deleted": len(ids)}))
         except Exception as e:
             self.write(json.dumps({"success": False, "message": str(e)}))
 
