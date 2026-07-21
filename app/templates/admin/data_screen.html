@@ -187,7 +187,7 @@ function loadAll() {
     // 状态分布
     fetch('/api/data-screen/status').then(function(r){return r.json()}).then(function(res){
         if (!res.success || !res.data || !res.data.length) return;
-        var stColors = {'普通采集':'#3b82f6','深度采集':'#22c55e','未采集':'#f97316'};
+        var stColors = {'普通采集':'#3b82f6','深度采集':'#22c55e'};
         pieChart.setOption({
             backgroundColor: 'transparent',
             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },

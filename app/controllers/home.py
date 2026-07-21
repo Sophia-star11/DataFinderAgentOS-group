@@ -341,19 +341,17 @@ class DataScreenGlobeApiHandler(AdminBaseHandler):
 
 
 class DataScreenStatusApiHandler(AdminBaseHandler):
-    """数智大屏数据状态分布 — 普通采集/深度采集/监控源"""
+    """数智大屏数据状态分布 — 普通采集/深度采集"""
     @tornado.web.authenticated
     def get(self):
         try:
             with get_connection() as conn:
                 total = conn.execute("SELECT COUNT(*) FROM data_warehouse").fetchone()[0] or 0
                 deep = conn.execute("SELECT COUNT(*) FROM data_warehouse WHERE is_deep_collected=1").fetchone()[0] or 0
-                sources = conn.execute("SELECT COUNT(*) FROM watch_sources").fetchone()[0] or 0
             normal = total - deep
             data = [
                 {"name": "普通采集", "value": normal},
-                {"name": "深度采集", "value": deep},
-                {"name": "未采集", "value": sources}
+                {"name": "深度采集", "value": deep}
             ]
             self.write(json.dumps({"success": True, "data": data}))
         except Exception:
